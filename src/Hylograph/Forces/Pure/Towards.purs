@@ -50,7 +50,7 @@ initialize config nodes = Towards (filter aimed (map pulled nodes))
     in
       { node, x: target.x, y: target.y, strength: if isNaN strength then 0.0 else strength }
 
-  aimed pulled = not (isNaN pulled.x || isNaN pulled.y)
+  aimed candidate = not (isNaN candidate.x || isNaN candidate.y)
 
 apply :: forall row. Towards row -> Number -> Effect Unit
 apply (Towards nodes) alpha =

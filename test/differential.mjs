@@ -120,7 +120,7 @@ const forces = {
   }),
   collide: ({ radius = always(1), strength = 1, iterations = 1 } = {}) => ({
     d3: () => d3.forceCollide().radius(radius).strength(strength).iterations(iterations),
-    pure: (random, nodes) => Pure.collide({ radius, strength, iterations })(random)(nodes),
+    pure: (random, nodes) => Pure.collide({ radius, strength, iterations, include: () => true, alphaScaled: false })(random)(nodes),
   }),
   center: ({ x = 0, y = 0, strength = 1 } = {}) => ({
     d3: () => d3.forceCenter(x, y).strength(strength),
@@ -145,7 +145,7 @@ const forces = {
 // ---------------------------------------------------------------------------
 
 const fields = ['x', 'y', 'vx', 'vy'];
-const defaults = { alphaTarget: 0, alphaDecay: 1 - Math.pow(0.001, 1 / 300), velocityDecay: 0.6 };
+const defaults = { alphaTarget: 0, alphaDecay: 1 - Math.pow(0.001, 1 / 300), velocityRetention: 0.6 };
 
 // Returns the first tick (from 0) at which the two disagree, or -1.
 const run = ({ nodes, links = [], forceList, settings = defaults, ticks = ticksPerScenario, reference = 'loop' }) => {
@@ -172,8 +172,8 @@ const run = ({ nodes, links = [], forceList, settings = defaults, ticks = ticksP
       alpha += (settings.alphaTarget - alpha) * settings.alphaDecay;
       for (const force of built) force(alpha);
       for (const node of forD3) {
-        if (node.fx == null) node.x += node.vx *= settings.velocityDecay; else node.x = node.fx, node.vx = 0;
-        if (node.fy == null) node.y += node.vy *= settings.velocityDecay; else node.y = node.fy, node.vy = 0;
+        if (node.fx == null) node.x += node.vx *= settings.velocityRetention; else node.x = node.fx, node.vx = 0;
+        if (node.fy == null) node.y += node.vy *= settings.velocityRetention; else node.y = node.fy, node.vy = 0;
       }
     };
   }
@@ -345,7 +345,7 @@ if (!quick) {
     // Shuffle the kinds of force, then take the first few: any subset, in any order.
     const order = available.map((build) => [random(), build]).sort((a, b) => a[0] - b[0]).map(([, build]) => build);
     const forceList = order.slice(0, 1 + Math.floor(random() * order.length)).map((build) => build());
-    const settings = { alphaTarget: pick([0, 0, 0.3]), alphaDecay: pick([defaults.alphaDecay, 0.05]), velocityDecay: pick([0.6, 0.6, 0.9, 0.3]) };
+    const settings = { alphaTarget: pick([0, 0, 0.3]), alphaDecay: pick([defaults.alphaDecay, 0.05]), velocityRetention: pick([0.6, 0.6, 0.9, 0.3]) };
     record('random graphs', `graph ${graph}`, count, run({ nodes, links, forceList, settings }));
   }
 }

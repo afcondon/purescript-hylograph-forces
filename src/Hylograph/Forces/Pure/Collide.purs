@@ -45,25 +45,41 @@ type Config row =
   { radius :: Node row -> Number
   , strength :: Number
   , iterations :: Int
+  , include :: Node row -> Boolean
+  , alphaScaled :: Boolean
   }
 
--- | d3's defaults: radius 1, full strength, one iteration.
+-- | d3's defaults: radius 1, full strength, one iteration; and the two
+-- | things d3 does not have turned off.
+-- |
+-- | Those two are the Rust kernel's "yielding collision" (`apply_collide`
+-- | in `force-kernel/src/forces.rs`), held to it by `test/differential.mjs`:
+-- |
+-- | - `alphaScaled`: the strength used is `strength * alpha`, so the
+-- |   collision weakens as the simulation cools and gives way to forces
+-- |   that hold a node at a place;
+-- | - `include`: a pair is tested only if both of its nodes are included. A
+-- |   node left out neither pushes nor is pushed. (It is still in the
+-- |   quadtree, where it can only widen the search.)
 defaultConfig :: forall row. Config row
 defaultConfig =
   { radius: \_ -> 1.0
   , strength: 1.0
   , iterations: 1
+  , include: \_ -> true
+  , alphaScaled: false
   }
 
--- | A node as the force sees it: its place in the node array and its
--- | radius.
-type Body row = { index :: Int, radius :: Number, node :: Node row }
+-- | A node as the force sees it: its place in the node array, its radius,
+-- | and whether it collides at all.
+type Body row = { index :: Int, radius :: Number, included :: Boolean, node :: Node row }
 
 -- | An initialized collision force.
 newtype Collide row = Collide
   { bodies :: Array (Body row)
   , strength :: Number
   , iterations :: Int
+  , alphaScaled :: Boolean
   , random :: Random.Source
   }
 
@@ -71,32 +87,37 @@ newtype Collide row = Collide
 -- | the array, which is what d3's simulation sets `node.index` to.
 initialize :: forall row. Config row -> Random.Source -> Array (Node row) -> Collide row
 initialize config random nodes = Collide
-  { bodies: mapWithIndex (\index node -> { index, radius: config.radius node, node }) nodes
+  { bodies: mapWithIndex (\index node -> { index, radius: config.radius node, included: config.include node, node }) nodes
   , strength: config.strength
   , iterations: config.iterations
+  , alphaScaled: config.alphaScaled
   , random
   }
 
--- | d3's `force()`: resolve overlaps, `iterations` times over.
-apply :: forall row. Collide row -> Effect Unit
-apply (Collide force) =
+-- | d3's `force()`: resolve overlaps, `iterations` times over. Alpha is
+-- | used only by a collision whose strength is scaled by it.
+apply :: forall row. Collide row -> Number -> Effect Unit
+apply (Collide force) alpha =
   forE 0 force.iterations \_ -> do
     points <- anticipate force.bodies
     let chain = regions (Quadtree.build points)
-    foreachE force.bodies \body -> do
-      seed <- Ref.read force.random
-      let
-        moved = runFn10 walk force.strength body.index body.radius
-          (body.node.x + body.node.vx)
-          (body.node.y + body.node.vy)
-          chain
-          body.node.vx
-          body.node.vy
-          seed
-          NoPushes
-      runEffectFn3 writeVelocity body.node moved.vx moved.vy
-      Ref.write moved.seed force.random
-      deliver moved.pushes
+    foreachE force.bodies \body ->
+      when body.included do
+        seed <- Ref.read force.random
+        let
+          moved = runFn10 walk strength body.index body.radius
+            (body.node.x + body.node.vx)
+            (body.node.y + body.node.vy)
+            chain
+            body.node.vx
+            body.node.vy
+            seed
+            NoPushes
+        runEffectFn3 writeVelocity body.node moved.vx moved.vy
+        Ref.write moved.seed force.random
+        deliver moved.pushes
+  where
+  strength = if force.alphaScaled then force.strength * alpha else force.strength
 
 -- | Where each node will be once its velocity is added, newest first. An
 -- | effect, because the nodes are mutable: they are read when the force is
@@ -139,7 +160,7 @@ regions planted =
   thread = mkFn6 \tree x0 y0 x1 y1 after -> case tree of
     Empty -> after
     Leaf newest _ ->
-      Region newest.item.radius x0 y0 x1 y1 after after (Occupant newest.item.index newest.item.node)
+      Region newest.item.radius x0 y0 x1 y1 after after (occupantOf newest.item)
     Branch topLeft topRight bottomLeft bottomRight ->
       let
         middleX = (x0 + x1) / 2.0
@@ -153,6 +174,11 @@ regions planted =
             (runFn3 larger bottomLeft third (runFn3 larger topRight second (runFn3 larger topLeft first 0.0)))
       in
         Region radius x0 y0 x1 y1 first after Unoccupied
+
+  -- A node left out of the collision stands in its leaf under an index no
+  -- walking node's index is below, so that no walk ever tests it.
+  occupantOf :: Body row -> Occupant row
+  occupantOf body = Occupant (if body.included then body.index else -1) body.node
 
   -- d3: `if (quad[i] && quad[i].r > quad.r) quad.r = quad[i].r`
   larger :: Fn3 (Quadtree (Body row)) (Region row) Number Number

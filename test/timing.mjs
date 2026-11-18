@@ -90,8 +90,8 @@ const viaPure = (directory) => (n) => {
   if (chosen.includes('m')) forces.push(Pure.manyBody({ strength: () => -30, theta: 0.9, distanceMin: 1, distanceMax: Infinity, scope: PureManyBody.everyPair, group: () => PureGroup.ungrouped })(random)(nodes));
   if (chosen.includes('l')) forces.push(Pure.link({ distance: () => 30, strength: PureLink.strengthFromDegree, iterations: 1 })(random)(nodes)(graph(n).map(([source, target]) => ({ source, target }))));
   if (chosen.includes('c')) forces.push(Pure.center({ x: 0, y: 0, strength: 1 })(nodes));
-  if (chosen.includes('k')) forces.push(Pure.collide({ radius: radiusOf, strength: 1, iterations: 1 })(random)(nodes));
-  const step = Pure.tick({ alphaTarget: 0, alphaDecay, velocityDecay: 0.6 })(forces)(nodes);
+  if (chosen.includes('k')) forces.push(Pure.collide({ radius: radiusOf, strength: 1, iterations: 1, include: () => true, alphaScaled: false })(random)(nodes));
+  const step = Pure.tick({ alphaTarget: 0, alphaDecay, velocityRetention: 0.6 })(forces)(nodes);
   let alpha = 1;
   return { nodes, tick: () => { alpha = step(alpha)(); } };
 };

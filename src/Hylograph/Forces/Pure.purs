@@ -156,7 +156,7 @@ applyForce :: forall row. Number -> Force row -> Effect Unit
 applyForce alpha force = case force of
   ManyBodyForce state -> ManyBody.apply state alpha
   LinkForce state -> Link.apply state alpha
-  CollideForce state -> Collide.apply state
+  CollideForce state -> Collide.apply state alpha
   CenterForce state -> Center.apply state
   PositionXForce state -> Position.applyX state alpha
   PositionYForce state -> Position.applyY state alpha
@@ -189,14 +189,14 @@ constrain forces nodes =
     _ -> false
 
 -- | The settings of a tick that are not forces.
-type Settings = { alphaTarget :: Number, alphaDecay :: Number, velocityDecay :: Number }
+type Settings = { alphaTarget :: Number, alphaDecay :: Number, velocityRetention :: Number }
 
 -- | d3's defaults.
 defaultSettings :: Settings
 defaultSettings =
   { alphaTarget: 0.0
   , alphaDecay: Tick.defaultAlphaDecay
-  , velocityDecay: Tick.defaultVelocityDecay
+  , velocityRetention: Tick.defaultVelocityRetention
   }
 
 -- | One tick of d3's simulation: cool alpha, apply the forces at the cooled
@@ -206,6 +206,6 @@ tick :: forall row. Settings -> Array (Force (Pinnable row)) -> Array (Node (Pin
 tick settings forces nodes alpha = do
   let cooled = Tick.cool { alphaTarget: settings.alphaTarget, alphaDecay: settings.alphaDecay } alpha
   applyForces cooled forces
-  Tick.integrate settings.velocityDecay nodes
+  Tick.integrate settings.velocityRetention nodes
   constrain forces nodes
   pure cooled

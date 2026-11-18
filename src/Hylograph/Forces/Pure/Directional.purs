@@ -35,7 +35,7 @@ import Data.Either (Either)
 import Data.Number (isFinite, isNaN, sqrt)
 import Effect (Effect, forE, foreachE)
 import Effect.Uncurried (runEffectFn3)
-import Hylograph.Forces.Pure.Linkage (Endpoints, Identified, Joined, join, joinById)
+import Hylograph.Forces.Pure.Linkage (Endpoints, Identified, Joined, joinByPlace, joinById)
 import Hylograph.Forces.Pure.Node (Node, writeVelocity)
 
 -- | `gap` and `strength` are asked once per link when the force is
@@ -68,7 +68,7 @@ newtype Directional row = Directional
 
 -- | For links that name their nodes by place in the node array.
 initialize :: forall row linkRow. Config (Endpoints linkRow) -> Array (Node row) -> Array (Endpoints linkRow) -> Directional row
-initialize config nodes links = ordered config (join nodes links)
+initialize config nodes links = ordered config (joinByPlace nodes links)
 
 -- | For links that name their nodes by id; a link to an id no node has is
 -- | d3's error, `node not found: <id>`.

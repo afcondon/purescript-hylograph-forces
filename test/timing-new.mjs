@@ -110,7 +110,7 @@ const viaPure = (directory, which) => (n) => {
   const nodes = makeNodes(n), links = graph(n);
   const random = modules.Random.lcg();
   const forces = cases[which].pure(modules, random, nodes, links);
-  const step = modules.Pure.tick({ alphaTarget: 0, alphaDecay, velocityDecay: 0.6 })(forces)(nodes);
+  const step = modules.Pure.tick({ alphaTarget: 0, alphaDecay, velocityRetention: 0.6 })(forces)(nodes);
   let alpha = 1;
   return { tick: () => { alpha = step(alpha)(); }, done: () => {} };
 };

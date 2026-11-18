@@ -4,7 +4,7 @@
 -- | The degree counts and the bias are d3-force 3.0.0's (`link.js`,
 -- | `initialize`; ISC, Copyright 2010-2021 Mike Bostock; see LICENSE).
 -- |
--- | A link can name its nodes by their place in the node array (`join`) or
+-- | A link can name its nodes by their place in the node array (`joinByPlace`) or
 -- | by an id read off each node (`joinById`). By place, a link that names a
 -- | place outside the array is dropped. By id, a link that names an id no
 -- | node has is an error, with d3's message.
@@ -12,7 +12,7 @@ module Hylograph.Forces.Pure.Linkage
   ( Endpoints
   , Identified
   , Joined
-  , join
+  , joinByPlace
   , joinById
   ) where
 
@@ -51,8 +51,8 @@ type Joined row link =
 
 -- | Join links that name their nodes by place. A link naming a place
 -- | outside the array is dropped.
-join :: forall row linkRow. Array (Node row) -> Array (Endpoints linkRow) -> Array (Joined row (Endpoints linkRow))
-join nodes links = joinPlaces nodes (map (\link -> { source: link.source, target: link.target, link }) links)
+joinByPlace :: forall row linkRow. Array (Node row) -> Array (Endpoints linkRow) -> Array (Joined row (Endpoints linkRow))
+joinByPlace nodes links = joinPlaces nodes (map (\link -> { source: link.source, target: link.target, link }) links)
 
 -- | Join links that name their nodes by id: d3's `force.id(...)`. Where two
 -- | nodes share an id the later one is meant, as in d3. A link whose source

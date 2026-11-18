@@ -44,5 +44,7 @@ foreign import writePosition :: forall row. EffectFn3 (Node row) Number Number U
 -- | `node.fx = fx; node.fy = fy`, for restoring a snapshot.
 foreign import writePin :: forall row. EffectFn3 (Node (Pinnable row)) (Nullable Number) (Nullable Number) Unit
 
--- | `node.index = index`, for d3's `initializeNodes`.
-foreign import writeIndex :: forall row. EffectFn2 (Node (index :: Int | row)) Int Unit
+-- | `node.index = index`, for d3's `initializeNodes`. d3 puts the index on
+-- | every node whether or not the application's node type has a field for
+-- | it, and so does this: the row is not asked to contain `index`.
+foreign import writeIndex :: forall row. EffectFn2 (Node row) Int Unit

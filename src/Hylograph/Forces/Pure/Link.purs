@@ -28,7 +28,7 @@ import Data.Number (sqrt)
 import Effect (Effect, forE, foreachE)
 import Effect.Uncurried (EffectFn4, mkEffectFn4, runEffectFn3, runEffectFn4)
 import Hylograph.Forces.Pure.Linkage (Endpoints, Identified) as Linkage
-import Hylograph.Forces.Pure.Linkage (Joined, join, joinById)
+import Hylograph.Forces.Pure.Linkage (Joined, joinByPlace, joinById)
 import Hylograph.Forces.Pure.Node (Node, writeVelocity)
 import Hylograph.Forces.Pure.Random as Random
 
@@ -88,7 +88,7 @@ initialize
   -> Array (Node row)
   -> Array (Linkage.Endpoints linkRow)
   -> Link row
-initialize config random nodes links = springs config random (join nodes links)
+initialize config random nodes links = springs config random (joinByPlace nodes links)
 
 -- | The same for links that name their nodes by id, as d3's `force.id(...)`
 -- | has it and as Hylograph's links do. A link naming an id that no node has

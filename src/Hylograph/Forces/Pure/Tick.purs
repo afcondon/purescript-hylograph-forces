@@ -4,7 +4,7 @@
 -- | Mike Bostock); see LICENSE.
 module Hylograph.Forces.Pure.Tick
   ( defaultAlphaDecay
-  , defaultVelocityDecay
+  , defaultVelocityRetention
   , cool
   , decay
   , initializeNodes
@@ -27,10 +27,11 @@ import Hylograph.Forces.Pure.Node (Node, Pinnable, writeIndex, writePosition, wr
 defaultAlphaDecay :: Number
 defaultAlphaDecay = 1.0 - pow 0.001 (1.0 / 300.0)
 
--- | What d3 multiplies a velocity by each tick. (d3's `velocityDecay(0.4)`
--- | is the friction; this is one minus it.)
-defaultVelocityDecay :: Number
-defaultVelocityDecay = 0.6
+-- | The share of its velocity a node keeps from one tick to the next: what
+-- | d3 multiplies a velocity by. (d3's `velocityDecay(0.4)` is the share
+-- | lost; this is one minus it.)
+defaultVelocityRetention :: Number
+defaultVelocityRetention = 0.6
 
 -- | d3: `alpha += (alphaTarget - alpha) * alphaDecay`. Called before the
 -- | forces of a tick, with the tick's forces given the result.
@@ -47,17 +48,17 @@ cool settings alpha = alpha + (settings.alphaTarget - alpha) * settings.alphaDec
 -- | and the same for y. The position is written before the velocity, and
 -- | neither write changes what the other one reads.
 integrate :: forall row. Number -> Array (Node (Pinnable row)) -> Effect Unit
-integrate velocityDecay nodes =
+integrate velocityRetention nodes =
   foreachE nodes \node -> case toMaybe node.fx, toMaybe node.fy of
     Nothing, Nothing -> do
-      runEffectFn3 writePosition node (node.x + node.vx * velocityDecay) (node.y + node.vy * velocityDecay)
-      runEffectFn3 writeVelocity node (node.vx * velocityDecay) (node.vy * velocityDecay)
+      runEffectFn3 writePosition node (node.x + node.vx * velocityRetention) (node.y + node.vy * velocityRetention)
+      runEffectFn3 writeVelocity node (node.vx * velocityRetention) (node.vy * velocityRetention)
     Just fx, Nothing -> do
-      runEffectFn3 writePosition node fx (node.y + node.vy * velocityDecay)
-      runEffectFn3 writeVelocity node 0.0 (node.vy * velocityDecay)
+      runEffectFn3 writePosition node fx (node.y + node.vy * velocityRetention)
+      runEffectFn3 writeVelocity node 0.0 (node.vy * velocityRetention)
     Nothing, Just fy -> do
-      runEffectFn3 writePosition node (node.x + node.vx * velocityDecay) fy
-      runEffectFn3 writeVelocity node (node.vx * velocityDecay) 0.0
+      runEffectFn3 writePosition node (node.x + node.vx * velocityRetention) fy
+      runEffectFn3 writeVelocity node (node.vx * velocityRetention) 0.0
     Just fx, Just fy -> do
       runEffectFn3 writePosition node fx fy
       runEffectFn3 writeVelocity node 0.0 0.0
@@ -89,7 +90,7 @@ decay settings alpha =
 -- | ```
 -- |
 -- | A field that is missing reads as `NaN` here, as it does in d3.
-initializeNodes :: forall row. Array (Node (Pinnable (index :: Int | row))) -> Effect Unit
+initializeNodes :: forall row. Array (Node (Pinnable row)) -> Effect Unit
 initializeNodes nodes =
   foreachE (mapWithIndex (\index node -> { index, node }) nodes) \placed -> do
     runEffectFn2 writeIndex placed.node placed.index

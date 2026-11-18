@@ -5,7 +5,8 @@
 // bits, which does the same arithmetic in the same order if both follow the
 // rule written on each `apply_*` function there. Same inputs through both,
 // and after every tick `Object.is` on every node's x, y, vx, vy, and on the
-// kinetic energy and the largest displacement. Every scenario also takes a
+// kinetic energy, the largest displacement, the largest acceleration and
+// `settled`. Every scenario also takes a
 // snapshot part of the way through on both sides, runs on, restores, runs
 // the same number of ticks again and requires the same end, exactly.
 //
@@ -142,9 +143,16 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
       },
       pure: (random, nodes, links) => Pure.link({ distance, strength: PureLink.strengthPerLink(strength), iterations })(random)(nodes)(links),
     }),
-    collide: ({ radius = always(1), strength = 1, iterations = 1 } = {}) => ({
-      kernel: (sim, nodes) => { const id = sim.add_collide(0, strength, iterations); sim.set_force_radii(id, floats(nodes, radius)); },
-      pure: (random, nodes) => Pure.collide({ radius, strength, iterations })(random)(nodes),
+    // d3's collide, and the kernel's two additions to it: a node filter, and
+    // a strength that follows alpha.
+    collide: ({ radius = always(1), strength = 1, iterations = 1, include = null, alphaScaled = false } = {}) => ({
+      kernel: (sim, nodes) => {
+        const id = sim.add_collide(0, strength, iterations);
+        sim.set_force_radii(id, floats(nodes, radius));
+        if (include) sim.set_collide_filter(id, Uint8Array.from(nodes, (node) => (include(node) ? 1 : 0)));
+        if (alphaScaled) sim.set_collide_alpha_scaled(id, true);
+      },
+      pure: (random, nodes) => Pure.collide({ radius, strength, iterations, include: include ?? always(true), alphaScaled })(random)(nodes),
     }),
     center: ({ x = 0, y = 0, strength = 1 } = {}) => ({
       kernel: (sim) => { sim.add_center(x, y, strength); },
@@ -175,7 +183,7 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
     for (const force of forceList) force.kernel(sim, forPure, links);
     sim.set_alpha_decay(settings.alphaDecay);
     sim.set_alpha_target(settings.alphaTarget);
-    sim.set_velocity_decay(settings.velocityDecay);
+    sim.set_velocity_retention(settings.velocityRetention);
     let alpha = 1;
     sim.set_alpha(alpha + (settings.alphaTarget - alpha) * settings.alphaDecay);
 
@@ -185,10 +193,13 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
     let compared = 0, notFinite = 0;
 
     // One tick on both sides; returns a description of the first difference, or null.
+    const watch = PureMeasure.watch();
+    const tolerance = { step: 0.05, acceleration: 0.01 };
     const tickBoth = () => {
-      const before = PureMeasure.remember(forPure)();
+      PureMeasure.before(watch)(forPure)();
       sim.tick();
       alpha = step(alpha)();
+      PureMeasure.after(watch)(forPure)();
       const positions = sim.get_positions(), velocities = sim.get_velocities();
       for (let i = 0; i < count; i++) {
         const theirs = [positions[i * 2], positions[i * 2 + 1], velocities[i * 2], velocities[i * 2 + 1]];
@@ -199,11 +210,16 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
           if (!Object.is(theirs[k], ours[k])) return `node ${i} ${['x', 'y', 'vx', 'vy'][k]}: kernel ${theirs[k]} pure ${ours[k]}`;
         }
       }
-      compared += 2;
-      const energy = [sim.kinetic_energy(), PureMeasure.kineticEnergy(forPure)()];
-      if (!Object.is(energy[0], energy[1]) && count > 0) return `kinetic energy: kernel ${energy[0]} pure ${energy[1]}`;
-      const furthest = [sim.max_displacement(), PureMeasure.maxDisplacement(before)(forPure)()];
-      if (!Object.is(furthest[0], furthest[1])) return `max displacement: kernel ${furthest[0]} pure ${furthest[1]}`;
+      const measures = [
+        ['kinetic energy', sim.kinetic_energy(), PureMeasure.kineticEnergy(forPure)()],
+        ['max displacement', sim.max_displacement(), PureMeasure.maxDisplacement(watch)()],
+        ['max acceleration', sim.max_acceleration(), PureMeasure.maxAcceleration(watch)()],
+        ['settled', sim.settled(tolerance.step, tolerance.acceleration), PureMeasure.settled(tolerance)(watch)()],
+      ];
+      for (const [name, theirs, ours] of measures) {
+        compared++;
+        if (!Object.is(theirs, ours)) return `${name}: kernel ${theirs} pure ${ours}`;
+      }
       return null;
     };
 
@@ -221,6 +237,7 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
     const end = forPure.map((node) => [node.x, node.y, node.vx, node.vy, node.fx, node.fy]);
     if (!sim.restore(kernelSnapshot)) { sim.free(); return { first: ticks, compared, notFinite, detail: 'kernel refused its own snapshot' }; }
     alpha = PureSnapshot.restore(pureSnapshot)(random)(forPure)();
+    PureMeasure.forget(watch)();
     for (let tick = snapshotAfter + 1; tick < ticks; tick++) {
       const difference = tickBoth();
       if (difference) { sim.free(); return { first: tick, compared, notFinite, detail: `after restore: ${difference}` }; }
@@ -306,6 +323,12 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
       ['within, nobody grouped', () => [forces.manyBody({ scope: 'within', group: noGroup })]],
       ['within, one group', () => [forces.manyBody({ scope: 'within', group: oneGroup, strength: chargeOf })]],
     ],
+    'yielding collide': [
+      ['strength follows alpha', () => [forces.collide({ radius: radiusOf, alphaScaled: true })]],
+      ['two thirds of the nodes collide', () => [forces.collide({ radius: radiusOf, include: (node) => node.index % 3 !== 0 })]],
+      ['both, strength 0.7, two iterations', () => [forces.collide({ radius: always(6), strength: 0.7, iterations: 2, alphaScaled: true, include: (node) => node.index % 2 === 0 })]],
+      ['nobody collides', () => [forces.collide({ radius: radiusOf, include: always(false) })]],
+    ],
     directional: [
       ['downward, per-link gap and strength', () => [forces.directional({ gap: gapOf, strength: stiffnessOf })]],
       ['slanted axis, not normalised, three iterations', () => [forces.directional({ axis: { x: 3, y: -4 }, gap: always(12), iterations: 3 })]],
@@ -383,14 +406,14 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
         () => forces.manyBody({ scope: pick(['within', 'between', 'all']), group: grouping, strength: pick([chargeOf, always(-60 * random())]), theta: pick([0, 0.5, 0.9, 1.5]), distanceMin: pick([1, 0.01, 4]), distanceMax: pick([Infinity, 50, 200]) }),
         () => forces.directional({ gap: pick([gapOf, always(random() * 40 - 5)]), strength: pick([stiffnessOf, always(random())]), axis: pick([{ x: 0, y: 1 }, { x: 1, y: 0 }, { x: -2, y: 5 }, { x: 0, y: 0 }]), iterations: pick([1, 1, 2]) }),
         () => forces.link({ distance: pick([always(30), (link) => link.length]), strength: pick([always(0.5), (link) => link.weight]), iterations: pick([1, 2]) }),
-        () => forces.collide({ radius: pick([always(1 + random() * 9), radiusOf]), strength: pick([1, 0.7]), iterations: pick([1, 2]) }),
+        () => forces.collide({ radius: pick([always(1 + random() * 9), radiusOf]), strength: pick([1, 0.7]), iterations: pick([1, 2]), alphaScaled: random() < 0.4, include: pick([null, null, (node) => node.index % 3 !== 0]) }),
         () => forces.center({ x: pick([0, 10]), y: pick([0, -10]), strength: pick([1, 0.5]) }),
         () => forces.x({ target: always(pick([0, 25])), strength: always(random() * 0.3) }),
         () => forces.y({ target: always(pick([0, -25])), strength: always(random() * 0.3) }),
       ];
       const order = available.map((build) => [random(), build]).sort((a, b) => a[0] - b[0]).map(([, build]) => build);
       const forceList = order.slice(0, 1 + Math.floor(random() * 6)).map((build) => build());
-      const settings = { alphaTarget: pick([0, 0, 0.3]), alphaDecay: pick([defaults.alphaDecay, 0.05]), velocityDecay: pick([0.6, 0.6, 0.9, 0.3]) };
+      const settings = { alphaTarget: pick([0, 0, 0.3]), alphaDecay: pick([defaults.alphaDecay, 0.05]), velocityRetention: pick([0.6, 0.6, 0.9, 0.3]) };
       record('random graphs (kernel)', `graph ${graph}`, count, run({ nodes, links, forceList, settings, ticks }));
     }
   }

@@ -32,7 +32,8 @@ going to the Rust/WASM kernel? The answer measured here is in
 | `…Pure.Cohesion` | kernel | pull each node toward its group's centroid |
 | `…Pure.ManyBody` (`Scope`) | kernel | many-body within groups only, or between groups only |
 | `…Pure.Directional` | kernel | keep each link's target a gap beyond its source along an axis |
-| `…Pure.Snapshot`, `…Pure.Measure` | kernel | snapshot and restore; kinetic energy and largest displacement |
+| `…Pure.Collide` (`include`, `alphaScaled`) | kernel | a collision that leaves some nodes out, or weakens as the simulation cools |
+| `…Pure.Snapshot`, `…Pure.Measure` | kernel | snapshot and restore; kinetic energy, largest displacement, largest acceleration, `settled` |
 | `…Pure.Group` | | which group a node is in |
 
 "kernel" means the rule is the one written on the matching `apply_*`
@@ -45,7 +46,7 @@ functions: nodes are the same records (`x`, `y`, `vx`, `vy`, optionally `fx`,
 `fy`), updated in place; a force is initialized against the node array and
 then applied once per tick with alpha.
 
-2,771 lines of PureScript, 1,763 of them code (the d3 part was 1,490 and 921). Four lines of JavaScript.
+2,899 lines of PureScript, 1,839 of them code (the d3 part was 1,490 and 921). Four lines of JavaScript.
 
 ### The foreign code
 
@@ -159,26 +160,27 @@ of it.
 
 For the forces d3 does not have, the oracle is the Rust kernel built at f64.
 Same inputs through both; after every tick `Object.is` on x, y, vx, vy of
-every node and on kinetic energy and largest displacement. Every scenario
+every node and on kinetic energy, largest displacement, largest
+acceleration and `settled`. Every scenario
 also snapshots a third of the way through on both sides, runs to 300 ticks,
 restores, runs the same ticks again and must end in the same place.
 
 | Force | Scenarios | Largest | Values compared | Nothing moved in | Stock `purs` | `purs-backend-es` |
 |---|---|---|---|---|---|---|
-| towards | 210 | 1,000 nodes | 93,795,072 | 8 | identical | identical |
-| rectangle collision | 210 | 1,000 | 93,795,072 | 58 | identical | identical |
-| containment | 560 | 1,000 | 250,120,192 | 108 | identical | identical |
-| cohesion | 210 | 1,000 | 93,795,072 | 71 | identical | identical |
-| scoped many-body | 490 | 1,000 | 218,855,168 | 91 | identical | identical |
-| directional | 210 | 1,000 | 93,795,072 | 39 | identical | identical |
-| new and d3 forces combined | 352 | 10,000 | 164,365,516 | 21 | identical | identical |
-| random graphs, fixed seed, any of twelve kinds of force | 400 | 150 | 61,646,386 | 6 | identical | identical |
+| towards | 210 | 1,000 nodes | 94,004,652 | 8 | identical | identical |
+| rectangle collision | 210 | 1,000 | 94,004,652 | 58 | identical | identical |
+| containment | 560 | 1,000 | 250,679,072 | 108 | identical | identical |
+| cohesion | 210 | 1,000 | 94,004,652 | 71 | identical | identical |
+| scoped many-body | 490 | 1,000 | 219,344,188 | 91 | identical | identical |
+| yielding collide (filter, strength following alpha) | 280 | 1,000 | 125,339,536 | 99 | identical | identical |
+| directional | 210 | 1,000 | 94,004,652 | 39 | identical | identical |
+| new and d3 forces combined | 352 | 10,000 | 164,715,212 | 21 | identical | identical |
+| random graphs, fixed seed, any of twelve kinds of force | 400 | 150 | 61,507,048 | 2 | identical | identical |
 
-2,642 scenarios and 1.07 billion values per backend, none of them `NaN` or
-infinite, and no tick at which any value differs. Snapshot and restore,
-kinetic energy and largest displacement are checked inside every one of
-them. The kernel was built from its source as it stood at 11:46 on
-2026-11-18.
+2,922 scenarios and 1.2 billion values per backend, none of them `NaN` or
+infinite, and no tick at which any value differs. Snapshot and restore, and
+the four measures, are checked inside every one of them. The kernel was built
+from its source as committed on 2026-11-18 (`794aa17`).
 
 The inputs are chosen to be awkward: every node on one spot; an integer
 lattice with region edges and polygon vertices on lattice points (nodes
@@ -219,9 +221,11 @@ Where the written rule was not enough and the Rust code had to be read:
   n-th tick runs at d3's (n-1)-th alpha; the test starts the kernel one
   cooling step ahead to line them up.
 
-The kernel moved on while this was written: `set_collide_alpha_scaled`,
-`set_collide_filter`, `max_acceleration`, `settled` and
-`set_velocity_retention` appeared in it afterwards and are not ported.
+The five things the kernel gained after the first six (a collision with a
+node filter, a collision whose strength follows alpha, `max_acceleration`,
+`settled`, and `velocity_retention` as the name of what a velocity keeps)
+are ported and in the table above ("yielding collide"; the two measures are
+compared after every tick of every scenario).
 
 ### Time per tick, the forces d3 does not have
 
@@ -367,38 +371,12 @@ later is exposed to it.
 - Like d3, the collision force looks only at the newest of several nodes at
   exactly the same place.
 
-## Wiring it into hylograph-simulation
+## In hylograph-simulation
 
-Not done here. What `Hylograph.ForceEngine.Core` would need:
-
-1. **`ForceHandle` becomes `Force row`.** Today it is an opaque foreign
-   type with no parameter; `Force` carries the node row. That reaches
-   `Simulation`'s `forces :: Ref (Map String ForceHandle)` and every
-   signature that mentions a handle.
-2. **A description before the nodes are known.** Core's `createManyBody
-   config` is pure and node-free, and `initializeForce handle nodes` binds
-   the nodes later. Here a force is made from its config and its nodes at
-   once. So Core needs a small `ForceSpec row` (one constructor per config)
-   and `initializeForce :: ForceSpec row -> Random.Source -> Array node ->
-   Force row`; `initializeLinkForce` goes to `linkById _.id`, and has to
-   decide what to do with the `Left` (d3 throws).
-3. **Configs map one to one.** Constants become constant accessors; the
-   filtered variants become `\node -> if keep node then strength else 0.0`;
-   the dynamic and grid variants are already accessors (`_.gridX`).
-4. **One `Random.lcg` per simulation**, passed to every force. Core passes
-   `Math.random` today, so layouts become repeatable: a change in
-   behaviour, for the better.
-5. **The loop.** `applyForce handle alpha` is `applyForce alpha force`;
-   `integratePositions` is `Tick.integrate`; `decayAlpha` is `Tick.decay`;
-   and, new, `constrain forces nodes` after the position update if hard
-   containment is to work.
-6. **`initializeNodes`** is `Tick.initializeNodes`, which wants
-   `index :: Int` in the node row (`SimulationNode` does not have it; Core
-   writes it untyped). It is d3's: a node with no position goes on the
-   phyllotaxis spiral, where Core's own puts it at random.
-7. **Nothing else moves.** Drag, the animation loop and the DOM helpers are
-   JavaScript on the same node objects and are unaffected. Core no longer
-   has to copy the links (d3 mutated them; this does not). `d3-force`
-   leaves `package.json`; `d3-drag` and `d3-selection` stay.
-8. **Publishing.** This package would have to be published or folded into
-   hylograph-simulation; everything it depends on is a core library.
+This is the default kernel of `purescript-hylograph-simulation` (a path
+dependency there, since this package is unpublished): its
+`Hylograph.ForceEngine.Core` wraps a `Force` as a recipe and a handle, and
+`Hylograph.ForceEngine.Setup.recipe` turns each force of a `Setup` into one.
+That library's `test/engine-parity.mjs` holds this kernel and the WASM kernel
+to each other through the one `Setup` vocabulary, and its README has the
+timings through its own loop.
