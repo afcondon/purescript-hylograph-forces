@@ -1,0 +1,23 @@
+workspace:
+  packageSet:
+    registry: 80.8.0
+  extraPackages: {}
+
+package:
+  name: hylograph-forces-pure
+  description: "Spike: d3-force's forces ported to PureScript with no JavaScript for the algorithms"
+  dependencies:
+    - arrays
+    - effect
+    - either
+    - foldable-traversable
+    - integers
+    - lists
+    - maybe
+    - nullable
+    - numbers
+    - ordered-collections
+    - prelude
+    - refs
+    - st
+    - tuples

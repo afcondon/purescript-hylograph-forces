@@ -1,0 +1,16 @@
+{
+  "name": "hylograph-forces-pure",
+  "private": true,
+  "type": "module",
+  "description": "Spike: d3-force's forces in PureScript, held to d3-force bit for bit",
+  "scripts": {
+    "build": "spago build",
+    "build:es": "spago build && purs-backend-es build --corefn-dir output --output-dir output-es",
+    "build:kernel": "cd ../../purescript-hylograph-showcases/wasm-force-demo/force-kernel && PATH=$HOME/.cargo/bin:$PATH wasm-pack build --target web --out-dir $OLDPWD/test/kernel-f64 -- --features f64",
+    "test": "node test/differential.mjs",
+    "timing": "node test/timing.mjs"
+  },
+  "devDependencies": {
+    "purs-backend-es": "^1.4.2"
+  }
+}
