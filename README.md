@@ -3,12 +3,16 @@
 d3-force's forces written in PureScript, with no JavaScript for any
 algorithm, held to d3-force 3.0.0 bit for bit and timed beside it; and the
 forces the Rust/WASM kernel has that d3 does not, held bit for bit to that
-kernel built at 64 bits. It is the default kernel of
+kernel built at 64 bits; and, under `Hylograph.Forces.ThreeD`, d3-force's
+seven forces in three dimensions, held bit for bit to d3-force-3d 3.0.6 (see
+[Three dimensions](#three-dimensions)). It is the default kernel of
 `purescript-hylograph-simulation`. (It began as a spike, under another name; the log
 further down is from then.)
 
 Licence: MIT AND ISC. The modules ported from d3-force and d3-quadtree say
-so at their heads, and `LICENSE` carries d3's ISC notice.
+so at their heads, and `LICENSE` carries d3's ISC notice; the
+three-dimensional modules are ported from d3-force-3d and d3-octree (MIT,
+Vasco Asturiano), whose notice `LICENSE` carries too.
 
 The question behind it: can Hylograph stop depending on d3-force without
 going to the Rust/WASM kernel? The answer measured here is in
@@ -79,9 +83,13 @@ node test/differential.mjs           # against d3-force and the kernel, bit for 
                                      #   --output output-es   --quick   --only d3 | kernel
 node test/timing.mjs --output output,output-es
 node test/timing-new.mjs             # the forces d3 does not have, beside the WASM kernel
+node test/differential-3d.mjs        # the 3D kernel against d3-force-3d, bit for bit
+                                     #   --output output-es   --quick
+node test/timing-3d.mjs --output output,output-es
 ```
 
-`npm install` brings d3-force 3.0.0, which the scripts read from this
+`npm install` brings d3-force 3.0.0 and d3-force-3d 3.0.6 (with
+d3-octree 1.1.0), which the scripts read from this
 package's own `node_modules`. The kernel half of the test
 (`test/kernel-oracle.mjs`) needs the Rust kernel built at 64 bits: clone
 [hylograph-force-kernel](https://github.com/afcondon/hylograph-force-kernel),
@@ -350,6 +358,171 @@ The WASM kernel is 2 to 4 times faster than the port under the optimising
 backend, and 4 to 9 times faster than it under the stock backend. None of these loops has had the attention the
 many-body walk had in the first half; rectangle collision in particular
 sorts a list per node.
+
+## Three dimensions
+
+`Hylograph.Forces.ThreeD` is d3-force's seven forces in three dimensions,
+ported from **d3-force-3d 3.0.6** (vasturiano's generalisation of d3-force
+to 1, 2 or 3 dimensions) at `numDimensions(3)`, over **d3-octree 1.1.0**. It
+sits beside the two-dimensional kernel and changes nothing in it: no 2D
+module was edited, and the 2D differential gives the same result as before.
+
+| Module | d3-force-3d source | What |
+|---|---|---|
+| `Hylograph.Forces.ThreeD` | `simulation.js` | one `Force` type over the eight below, `applyForces`, `tick` (cool, apply, move) |
+| `…ThreeD.ManyBody` | `manyBody.js` | Barnes-Hut over the octree: theta, distanceMin, distanceMax, per-node strength |
+| `…ThreeD.Link` | `link.js` | springs: degree-based strength and bias, per-link distance and strength, iterations |
+| `…ThreeD.Collide` | `collide.js` | sphere collisions: per-node radius, strength, iterations |
+| `…ThreeD.Center` | `center.js` | centring |
+| `…ThreeD.Position` | `x.js`, `y.js`, `z.js` | pull towards an x, a y or a z |
+| `…ThreeD.Radial` | `radial.js` | pull towards a sphere |
+| `…ThreeD.Tick` | `simulation.js` | the position update honouring `fx`, `fy`, `fz`; `initializeNodes` |
+| `…ThreeD.Octree` | d3-octree | the octree both tree forces are built on |
+| `…ThreeD.Node` | | the node type (`x y z vx vy vz`, optional `fx fy fz`) and its writes |
+
+Shared with the 2D kernel, because they have no dimension: the random
+source (`Hylograph.Forces.Random`: d3-force-3d's `lcg.js` and `jiggle.js` are
+d3-force's), the cooling step (`Tick.cool`, `defaultAlphaDecay`,
+`defaultVelocityRetention`), and links joined to nodes by place or by id with
+their degrees and bias (`Hylograph.Forces.Linkage`; a 3D node is a 2D node
+with `z` and `vz` besides). The many-body and collide modules have the 2D
+ones' shape (tree built without mutation, threaded into a chain, a
+stackless pure walk) and none of their code; the eight octants make the
+pieces wider, not different. 1,742 lines of PureScript, 1,137 of them code (lines that are neither blank nor comment).
+
+The foreign code is `ThreeD/Node.js`, the 2D file's four assignments with a
+third coordinate, and one line more: `ThreeD/Tick.js` binds `Math.cbrt`,
+which d3-force-3d's initial placement calls and which the `numbers`
+package does not bind (`pow x (1/3)` is a different number). It is a
+primitive bound exactly as `Data.Number` binds `sqrt`, `sin` and `cos`, not
+an algorithm, but it is the one foreign line that is not a write to a node.
+
+### Agreement with d3-force-3d
+
+`test/differential-3d.mjs` is `test/differential.mjs` in three dimensions:
+the same nodes, links and settings through d3-force-3d's own functions
+(initialized with `numDimensions` 3) and through the compiled PureScript,
+`Object.is` on `x`, `y`, `z`, `vx`, `vy`, `vz` of every node after every
+tick, no tolerance. Layouts: d3-force-3d's own spherical spiral, a scattered
+cube, every node on one spot (at the origin and elsewhere), an integer
+lattice (many nodes exactly coincident, many pairs equal on one or two
+axes), a line along x, the diagonal, a plane (the last three make flat and
+one-cell-wide octree cubes), and coincident pairs. Each force alone, still
+and moving; six combinations, with and without pinned nodes (`fx`, `fy`,
+`fz` independently); per-node and per-link parameters; 400 random graphs
+(any subset of the eight forces in any order, self-links and repeated
+links, pins, alpha targets, other velocity decays); nodes with `x`, `z` or
+`y` and `z` at `NaN`; a node at `NaN` with strength zero, which exerts
+nothing but still shapes the octree; 10,000 nodes for many-body, link and
+two combinations; 12,000 nodes on one spot for many-body and collide. The
+last two groups use the real `forceSimulation` as the reference:
+`forceSimulation(nodes).numDimensions(3)`, and, for `initializeNodes` with
+links by id, `forceSimulation(nodes, 3)`.
+
+| Group | Scenarios | Largest | Values compared | Not finite | Stock `purs` | `purs-backend-es` |
+|---|---|---|---|---|---|---|
+| many-body | 475 | 12,000 nodes | 203,662,800 | 411,402 | identical | identical |
+| link | 274 | 10,000 | 126,453,600 | 1,200 | identical | identical |
+| collide | 274 | 12,000 | 108,669,600 | 1,200 | identical | identical |
+| centre | 183 | 1,000 | 72,392,400 | 1,200 | identical | identical |
+| x | 180 | 1,000 | 72,122,400 | 0 | identical | identical |
+| y | 180 | 1,000 | 72,122,400 | 0 | identical | identical |
+| z | 183 | 1,000 | 72,392,400 | 1,800 | identical | identical |
+| radial | 183 | 1,000 | 72,392,400 | 1,200 | identical | identical |
+| combinations (incl. 10,000 nodes) | 542 | 10,000 | 240,367,200 | 0 | identical | identical |
+| random graphs, fixed seed | 400 | 150 | 55,762,200 | 0 | identical | identical |
+| against `forceSimulation(...).numDimensions(3)` | 72 | 1,000 | 47,952,000 | 0 | identical | identical |
+| `initializeNodes` + links by id, against `forceSimulation(nodes, 3)` | 6 | 1,000 | 2,808,632 | 0 | identical | identical |
+
+2,952 scenarios and 1.147 billion values per backend, and no tick at which
+any value differs. Every scenario is 300 ticks except the 12,000-node heaps
+(3 ticks), the many-body + link + centre + collide run at 10,000 (100) and
+the heap with a `NaN` node of strength zero (30). The full run takes 44
+minutes per backend on an M1 Pro; `--quick` (sizes 2, 10, 100; 60 random
+graphs) about two.
+
+The `NaN` values are those of the scenarios that put a node at `NaN` on
+purpose (in d3-force-3d the `NaN` spreads: on the heap it reaches every
+node). The quick run also passed with the compiled `sqrt(4 / 8)` of the
+many-body force changed to 1 (163 scenarios differ, at tick 0), and with
+the `|| 0` of the radial and centring forces taken out (both differ in the
+`NaN` scenarios), so the test does see these rules.
+
+### Where d3-force-3d is more than d3-force with a third coordinate
+
+- **Many-body scales clusters by depth.** `accumulate` multiplies the summed
+  strength of every cube with octants by `Math.sqrt(4 / numChildren)`, which
+  is 1 for a quadtree and `sqrt(1/2)` for an octree, at every level. A far
+  cluster therefore pulls with less than the sum of its nodes' strengths,
+  less the further it is from the leaves.
+- **`|| 0` where d3-force has none.** Many-body reads a child's centre as
+  `q.x || 0`; centring sums `node.x || 0` and moves an axis only `if (sx)`
+  (so a `NaN` or zero shift moves nothing, and a `-0` coordinate stays
+  `-0`); radial reads `(node.y || 0)` and `(node.z || 0)`, though not x.
+- **d3-octree puts a node at `NaN` into the tree.** `addAll` keeps
+  coordinates in `Float64Array`s and skips a point with a `NaN` coordinate
+  when filling them, so its slots stay 0: it is left out of the extent and
+  then inserted at (0, 0, 0). (d3-quadtree's arrays leave `undefined`, and
+  the point is dropped.) Where it is the leaf a later point meets, its own
+  `NaN` coordinates are read again, so where it ends up depends on
+  insertion order. `ThreeD.Octree` builds the tree top-down as the 2D one
+  does when every point is valid, and point by point, as d3-octree does,
+  when one is not.
+- **Initial placement** is a spherical spiral: radius `10 * Math.cbrt(0.5 +
+  i)`, two angles (the golden angle, and `Math.PI * 20 / (9 +
+  Math.sqrt(221))`), and a node missing any of x, y, z is placed whole,
+  losing the coordinate it had. `ThreeD.Tick.initialAngleYaw` is a value of
+  its own for the reason `initialAngle` is in 2D.
+- **`numDimensions(3)` on a running simulation re-initializes the forces
+  but not the nodes**: nodes without a position keep the flat spiral's
+  place and no z. Give the dimension to the constructor,
+  `forceSimulation(nodes, 3)`, for the 3D placement; the test does both.
+
+The octree is otherwise d3-quadtree with a third axis: octant index `deep
+<< 2 | bottom << 1 | right`, visited in that order; the extent a cube
+grown from the unit cube at the floor of the minimum, its side measured
+on x alone (`x1 - x0 || 1`).
+
+### Time per tick, three dimensions
+
+`test/timing-3d.mjs`, the method of `test/timing.mjs` in three dimensions:
+run.mjs's ring with chords, laid out on d3-force-3d's spherical spiral;
+many-body + link + centre; 300 ticks timed in blocks of ten over three
+interleaved runs, each block at its fastest; d3-force-3d's functions run the
+same way in the same process (Node 22, M1 Pro, load average about 5 from
+other work, 2026-11-19, after the full differential runs had finished).
+
+| Nodes | d3-force-3d | this, stock `purs` | this, `purs-backend-es` |
+|---|---|---|---|
+| 100 | 0.222 ms | 0.204 ms (0.92×) | 0.123 ms (0.56×) |
+| 1,000 | 5.51 ms | 3.92 ms (0.71×) | 2.57 ms (0.47×) |
+| 10,000 | 88.3 ms | 63.7 ms (0.72×) | 42.3 ms (0.48×) |
+
+Collisions alone (radius 3 to 7, with the position update), same method:
+
+| Nodes | d3-force-3d | this, stock `purs` | this, `purs-backend-es` |
+|---|---|---|---|
+| 1,000 | 3.19 ms | 2.18 ms (0.68×) | 1.26 ms (0.39×) |
+| 10,000 | 44.4 ms | 36.6 ms (0.83×) | 20.8 ms (0.47×) |
+
+Every contender ended its 300 ticks with every node where d3-force-3d put
+it, to the bit (the script checks). The port is relatively faster in three
+dimensions than in two; one likely reason, not measured, is that
+d3-force-3d's `apply` builds an array per visited cube
+(`[arg1, arg2, arg3][nDim-1]`, and six arguments into an array in
+collide) and tests `nDim` at every step, where the port has neither.
+
+### Not done in three dimensions
+
+- The six forces d3 does not have (towards, rectangle collision,
+  containment, cohesion, scoped many-body, directional), snapshots and
+  measures, and `constrain`: the 3D `tick` is d3-force-3d's, cool, apply,
+  move.
+- One and two dimensions of d3-force-3d (at two it is d3-force, which the
+  2D kernel is).
+- `hylograph-simulation` does not use the 3D kernel yet, and there is no
+  Rust kernel to hold it to.
+- No optimisation pass beyond the 2D kernel's lessons applied as written.
 
 ## How it is built, and why
 
