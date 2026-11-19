@@ -3,15 +3,16 @@
   "private": true,
   "license": "MIT AND ISC",
   "type": "module",
-  "description": "Spike: d3-force's forces in PureScript, held to d3-force bit for bit",
+  "description": "d3-force's forces, and six more, in PureScript: the checks against d3-force and the Rust kernel",
   "scripts": {
     "build": "spago build",
     "build:es": "spago build && purs-backend-es build --corefn-dir output --output-dir output-es",
-    "build:kernel": "cd ../../purescript-hylograph-showcases/wasm-force-demo/force-kernel && PATH=$HOME/.cargo/bin:$PATH wasm-pack build --target web --out-dir $OLDPWD/test/kernel-f64 -- --features f64",
+    "build:kernel": "KERNEL=\"${FORCE_KERNEL:-../../purescript-hylograph-showcases/wasm-force-demo/force-kernel}\"; OUT=\"$PWD/test/kernel-f64\"; cd \"$KERNEL\" && PATH=$HOME/.cargo/bin:$PATH wasm-pack build --target web --out-dir \"$OUT\" -- --features f64",
     "test": "node test/differential.mjs",
     "timing": "node test/timing.mjs"
   },
   "devDependencies": {
-    "purs-backend-es": "^1.4.2"
+    "purs-backend-es": "^1.4.2",
+    "d3-force": "3.0.0"
   }
 }

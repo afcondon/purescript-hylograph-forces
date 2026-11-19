@@ -27,9 +27,10 @@ const runs = Number(argument('--runs', 3));
 const sizes = argument('--sizes', '100,1000,10000').split(',').map(Number);
 const blocks = 10, ticksPerBlock = 10, ticks = blocks * ticksPerBlock;
 
-const demo = join(homedir(), 'work/afc-work/purescript-hylograph-showcases/wasm-force-demo');
-const { default: init, Simulation } = await import(pathToFileURL(join(demo, 'pkg/force_kernel.js')));
-await init({ module_or_path: readFileSync(join(demo, 'pkg/force_kernel_bg.wasm')) });
+// The kernel as shipped (f32): KERNEL_PKG is a `wasm-pack build --target web` output directory.
+const pkg = process.env.KERNEL_PKG || join(homedir(), 'work/afc-work/purescript-hylograph-showcases/wasm-force-demo/pkg');
+const { default: init, Simulation } = await import(pathToFileURL(join(pkg, 'force_kernel.js')));
+await init({ module_or_path: readFileSync(join(pkg, 'force_kernel_bg.wasm')) });
 
 const compiled = {};
 for (const directory of outputDirectories) {

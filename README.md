@@ -41,7 +41,7 @@ going to the Rust/WASM kernel? The answer measured here is in
 | `…Forces.Group` | | which group a node is in |
 
 "kernel" means the rule is the one written on the matching `apply_*`
-function in `purescript-hylograph-showcases/wasm-force-demo/force-kernel/src/forces.rs`.
+function in [hylograph-force-kernel](https://github.com/afcondon/hylograph-force-kernel)'s `src/forces.rs`.
 `…Forces.Tick` also has d3's `initializeNodes` (index, pins, phyllotaxis for
 a node with no position) and the cooling step as `ForceEngine.Core` has it.
 
@@ -81,10 +81,14 @@ node test/timing.mjs --output output,output-es
 node test/timing-new.mjs             # the forces d3 does not have, beside the WASM kernel
 ```
 
-The scripts read d3-force from `~/node_modules/d3-force/src`. The kernel
-half of the test (`test/kernel-oracle.mjs`) needs the f64 build; without
-`build:kernel` it uses the copy the crate's own test keeps in
-`force-kernel/target/pkg-f64`, and says which it used.
+`npm install` brings d3-force 3.0.0, which the scripts read from this
+package's own `node_modules`. The kernel half of the test
+(`test/kernel-oracle.mjs`) needs the Rust kernel built at 64 bits: clone
+[hylograph-force-kernel](https://github.com/afcondon/hylograph-force-kernel),
+set `FORCE_KERNEL` to the clone, and `npm run build:kernel` builds it into
+`test/kernel-f64` (it needs Rust's `wasm32-unknown-unknown` target and
+wasm-pack). Without that the kernel half is skipped, and the script says
+so; `--only d3` runs the d3 half alone.
 
 ## Results
 

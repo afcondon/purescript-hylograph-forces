@@ -4,7 +4,7 @@
 //   node test/differential.mjs [--output output|output-es] [--quick]
 //
 // Every scenario runs the same nodes, links and settings through d3-force's
-// own functions (read from ~/node_modules/d3-force/src) and through the
+// own functions (read from this package's node_modules/d3-force/src, after `npm install`) and through the
 // compiled PureScript (read from ./output, or ./output-es for the optimising
 // backend), and compares x, y, vx and vy of every node after every tick with
 // Object.is: -0 is not +0, and no tolerance anywhere. It reports, for each
@@ -14,7 +14,6 @@
 // call each force, then move the nodes (honouring fx / fy). That is how
 // Hylograph.ForceEngine.Core drives d3's forces today. A last group of
 // scenarios uses the real `d3.forceSimulation` as the reference instead.
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { kernelAvailable, kernelDirectory, runKernelScenarios } from './kernel-oracle.mjs';
@@ -29,8 +28,8 @@ const quick = process.argv.includes('--quick');
 const only = argument('--only', 'both'); // d3, kernel or both
 const ticksPerScenario = 300;
 
-const d3 = await import(pathToFileURL(join(homedir(), 'node_modules/d3-force/src/index.js')));
-const { default: d3Lcg } = await import(pathToFileURL(join(homedir(), 'node_modules/d3-force/src/lcg.js')));
+const d3 = await import(pathToFileURL(join(here, '..', 'node_modules/d3-force/src/index.js')));
+const { default: d3Lcg } = await import(pathToFileURL(join(here, '..', 'node_modules/d3-force/src/lcg.js')));
 const compiled = (module) => import(pathToFileURL(join(here, '..', outputDirectory, module, 'index.js')));
 const Pure = await compiled('Hylograph.Forces');
 const PureLink = await compiled('Hylograph.Forces.Link');

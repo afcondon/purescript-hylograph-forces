@@ -30,7 +30,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const local = join(dirname(fileURLToPath(import.meta.url)), 'kernel-f64');
-const kept = join(homedir(), 'work/afc-work/purescript-hylograph-showcases/wasm-force-demo/force-kernel/target/pkg-f64');
+// The crate's checkout: FORCE_KERNEL, or where it sits in the author's workspace.
+export const kernelSource = process.env.FORCE_KERNEL || join(homedir(), 'work/afc-work/purescript-hylograph-showcases/wasm-force-demo/force-kernel');
+const kept = join(kernelSource, 'target/pkg-f64');
 export const kernelDirectory = existsSync(join(local, 'force_kernel.js')) ? local : kept;
 export const kernelAvailable = () => existsSync(join(kernelDirectory, 'force_kernel.js'));
 

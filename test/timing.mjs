@@ -22,7 +22,6 @@
 //
 // A timing, not a benchmark suite: one machine, one graph shape, Node rather
 // than a browser.
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -37,8 +36,8 @@ const sizes = argument('--sizes', '100,1000,10000').split(',').map(Number);
 const chosen = argument('--forces', 'mlc');
 const blocks = 30, ticksPerBlock = 10, ticks = blocks * ticksPerBlock;
 
-const d3 = await import(pathToFileURL(join(homedir(), 'node_modules/d3-force/src/index.js')));
-const { default: d3Lcg } = await import(pathToFileURL(join(homedir(), 'node_modules/d3-force/src/lcg.js')));
+const d3 = await import(pathToFileURL(join(here, '..', 'node_modules/d3-force/src/index.js')));
+const { default: d3Lcg } = await import(pathToFileURL(join(here, '..', 'node_modules/d3-force/src/lcg.js')));
 const compiled = {};
 for (const directory of outputDirectories) {
   const load = (module) => import(pathToFileURL(join(here, '..', directory, module, 'index.js')));
