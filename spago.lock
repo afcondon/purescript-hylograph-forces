@@ -18,6 +18,9 @@
               "foldable-traversable": ">=6.0.0 <7.0.0"
             },
             {
+              "functions": ">=6.0.0 <7.0.0"
+            },
+            {
               "integers": ">=6.0.0 <7.0.0"
             },
             {
