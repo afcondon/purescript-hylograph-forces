@@ -1,10 +1,14 @@
-# hylograph-forces-pure
+# hylograph-forces
 
-**A spike, not a release.** d3-force's forces written in PureScript, with no
-JavaScript for any algorithm, held to d3-force 3.0.0 bit for bit and timed
-beside it; and the six forces the Rust/WASM kernel has that d3 does not,
-held bit for bit to that kernel built at 64 bits. Unpublished; nothing
-depends on it.
+d3-force's forces written in PureScript, with no JavaScript for any
+algorithm, held to d3-force 3.0.0 bit for bit and timed beside it; and the
+forces the Rust/WASM kernel has that d3 does not, held bit for bit to that
+kernel built at 64 bits. It is the default kernel of
+`purescript-hylograph-simulation`. (It began as a spike, under another name; the log
+further down is from then.)
+
+Licence: MIT AND ISC. The modules ported from d3-force and d3-quadtree say
+so at their heads, and `LICENSE` carries d3's ISC notice.
 
 The question behind it: can Hylograph stop depending on d3-force without
 going to the Rust/WASM kernel? The answer measured here is in
@@ -14,31 +18,31 @@ going to the Rust/WASM kernel? The answer measured here is in
 
 | Module | d3 source | What |
 |---|---|---|
-| `Hylograph.Forces.Pure` | `simulation.js` | one `Force` type over all seven, `applyForces`, and `tick` (cool, apply, move) |
-| `…Pure.ManyBody` | `manyBody.js` | Barnes-Hut many-body: theta, distanceMin, distanceMax, per-node strength |
-| `…Pure.Link` | `link.js` | springs: d3's degree-based strength and bias, per-link distance and strength, iterations |
-| `…Pure.Collide` | `collide.js` | circle collisions: per-node radius, strength, iterations |
-| `…Pure.Center` | `center.js` | centring |
-| `…Pure.Position` | `x.js`, `y.js` | pull towards an x or a y |
-| `…Pure.Radial` | `radial.js` | pull towards a circle |
-| `…Pure.Tick` | `simulation.js` | alpha decay; velocity decay and position update, honouring `fx` / `fy` |
-| `…Pure.Quadtree` | d3-quadtree | the quadtree both tree forces are built on |
-| `…Pure.Random` | `lcg.js`, `jiggle.js` | d3's seeded generator and its jiggle |
-| `…Pure.Linkage` | `link.js` | links joined to their nodes, by place or by id (d3's error for a missing node) |
-| `…Pure.Node` | | the node type, and the package's only foreign code |
-| `…Pure.Towards` | kernel | a spring from each node to its own target point |
-| `…Pure.RectCollide` | kernel | axis-aligned rectangles pushed apart along the axis of least overlap |
-| `…Pure.Contain` | kernel | keep nodes inside a rectangle, circle or convex polygon: soft force, optional hard clamp, region per node |
-| `…Pure.Cohesion` | kernel | pull each node toward its group's centroid |
-| `…Pure.ManyBody` (`Scope`) | kernel | many-body within groups only, or between groups only |
-| `…Pure.Directional` | kernel | keep each link's target a gap beyond its source along an axis |
-| `…Pure.Collide` (`include`, `alphaScaled`) | kernel | a collision that leaves some nodes out, or weakens as the simulation cools |
-| `…Pure.Snapshot`, `…Pure.Measure` | kernel | snapshot and restore; kinetic energy, largest displacement, largest acceleration, `settled` |
-| `…Pure.Group` | | which group a node is in |
+| `Hylograph.Forces` | `simulation.js` | one `Force` type over all seven, `applyForces`, and `tick` (cool, apply, move) |
+| `…Forces.ManyBody` | `manyBody.js` | Barnes-Hut many-body: theta, distanceMin, distanceMax, per-node strength |
+| `…Forces.Link` | `link.js` | springs: d3's degree-based strength and bias, per-link distance and strength, iterations |
+| `…Forces.Collide` | `collide.js` | circle collisions: per-node radius, strength, iterations |
+| `…Forces.Center` | `center.js` | centring |
+| `…Forces.Position` | `x.js`, `y.js` | pull towards an x or a y |
+| `…Forces.Radial` | `radial.js` | pull towards a circle |
+| `…Forces.Tick` | `simulation.js` | alpha decay; velocity decay and position update, honouring `fx` / `fy` |
+| `…Forces.Quadtree` | d3-quadtree | the quadtree both tree forces are built on |
+| `…Forces.Random` | `lcg.js`, `jiggle.js` | d3's seeded generator and its jiggle |
+| `…Forces.Linkage` | `link.js` | links joined to their nodes, by place or by id (d3's error for a missing node) |
+| `…Forces.Node` | | the node type, and the package's only foreign code |
+| `…Forces.Towards` | kernel | a spring from each node to its own target point |
+| `…Forces.RectCollide` | kernel | axis-aligned rectangles pushed apart along the axis of least overlap; a pinned one is never moved; a filter and pairs by group; optionally a squeezed rectangle goes through |
+| `…Forces.Contain` | kernel | keep nodes (circles, rectangles, rounded rectangles) inside a rectangle, circle or convex polygon: soft force, optional hard clamp, region per node |
+| `…Forces.Cohesion` | kernel | pull each node toward its group's centroid |
+| `…Forces.ManyBody` (`Scope`) | kernel | many-body within groups only, or between groups only |
+| `…Forces.Directional` | kernel | keep each link's target a gap beyond its source along an axis: a soft force, and optionally a hard projection that keeps the gap exactly |
+| `…Forces.Collide` (`include`, `alphaScaled`) | kernel | a collision that leaves some nodes out, or weakens as the simulation cools |
+| `…Forces.Snapshot`, `…Forces.Measure` | kernel | snapshot and restore; kinetic energy, largest displacement, largest acceleration, `settled` |
+| `…Forces.Group` | | which group a node is in |
 
 "kernel" means the rule is the one written on the matching `apply_*`
 function in `purescript-hylograph-showcases/wasm-force-demo/force-kernel/src/forces.rs`.
-`…Pure.Tick` also has d3's `initializeNodes` (index, pins, phyllotaxis for
+`…Forces.Tick` also has d3's `initializeNodes` (index, pins, phyllotaxis for
 a node with no position) and the cooling step as `ForceEngine.Core` has it.
 
 It fits the loop `Hylograph.ForceEngine.Core` already runs round d3's
@@ -168,19 +172,27 @@ restores, runs the same ticks again and must end in the same place.
 | Force | Scenarios | Largest | Values compared | Nothing moved in | Stock `purs` | `purs-backend-es` |
 |---|---|---|---|---|---|---|
 | towards | 210 | 1,000 nodes | 94,004,652 | 8 | identical | identical |
-| rectangle collision | 210 | 1,000 | 94,004,652 | 58 | identical | identical |
-| containment | 560 | 1,000 | 250,679,072 | 108 | identical | identical |
+| rectangle collision (with holds, filter, pairs by group, the squeeze, crowded wide boxes) | 902 | 1,000 | 282,376,688 | 216 | identical | identical |
+| containment (circles and rectangles) | 840 | 1,000 | 376,018,608 | 185 | identical | identical |
 | cohesion | 210 | 1,000 | 94,004,652 | 71 | identical | identical |
 | scoped many-body | 490 | 1,000 | 219,344,188 | 91 | identical | identical |
 | yielding collide (filter, strength following alpha) | 280 | 1,000 | 125,339,536 | 99 | identical | identical |
-| directional | 210 | 1,000 | 94,004,652 | 39 | identical | identical |
-| new and d3 forces combined | 352 | 10,000 | 164,715,212 | 21 | identical | identical |
+| directional (soft) | 210 | 1,000 | 94,004,652 | 39 | identical | identical |
+| new and d3 forces combined (with hard directional, and the labels problem) | 675 | 10,000 | 269,298,140 | 68 | identical | identical |
 | random graphs, fixed seed, any of twelve kinds of force | 400 | 150 | 61,507,048 | 2 | identical | identical |
+| random graphs, fixed seed, the options added 2026-11-18 | 400 | 150 | 62,582,122 | 4 | identical | identical |
 
-2,922 scenarios and 1.2 billion values per backend, none of them `NaN` or
+4,617 scenarios and 1.68 billion values per backend, none of them `NaN` or
 infinite, and no tick at which any value differs. Snapshot and restore, and
 the four measures, are checked inside every one of them. The kernel was built
-from its source as committed on 2026-11-18 (`794aa17`).
+from its source as it stood on 2026-11-18 with the changes described under
+"What four demos found" below (uncommitted in the crate at the time of
+writing; its last commit was `794aa17`).
+
+Rectangles that stay crowded for a whole run (pulled together, or kept in a
+box too small for them) cost a million pairs an iteration at a thousand
+nodes; those scenarios run up to 100 nodes, and at a thousand the crowd is
+run on the layouts that let it come apart.
 
 The inputs are chosen to be awkward: every node on one spot; an integer
 lattice with region edges and polygon vertices on lattice points (nodes
@@ -226,6 +238,89 @@ node filter, a collision whose strength follows alpha, `max_acceleration`,
 `settled`, and `velocity_retention` as the name of what a velocity keeps)
 are ported and in the table above ("yielding collide"; the two measures are
 compared after every tick of every scenario).
+
+### What four demos found (2026-11-18)
+
+Three rules changed, in both kernels at once, and the table above is of the
+kernels as they now are.
+
+**Rectangle collision** has a filter (`include`) and can be restricted to
+pairs within a group or between groups (`pairs`, `group`). It respects pins:
+a rectangle held on an axis is never pushed along it, and what overlaps it
+takes the whole correction on that axis instead of its share by area. *This
+changes what the force does for anyone who had pinned rectangles*: before, a
+big label on a small pinned dot was given a sliver of the push it needed and
+never cleared the dot.
+
+And it has an answer to the jam (`squeezed: goesThrough`, off by default). A
+wide rectangle nearly always overlaps another least vertically, so between
+two things that do not give way its pushes cancel and nothing resolves. The
+rule: over one application of the force, a rectangle that was pushed both
+ways on an axis goes with one side and has the other side's pushes undone;
+it goes the way it was already moving, if its velocity is more than a
+thousandth of what pushed it, and otherwise with the stronger side. It is
+stated in full at the top of `RectCollide.purs`.
+
+That rule was arrived at by trying the alternatives on the problem that
+found the jam, 180 labelled nations in a scatterplot, on a plain-JavaScript
+copy of the force that reproduced this one to the digit:
+
+- *Push the cancelled part sideways, away from whatever is squeezing* (the
+  suggestion that came with the report). It frees a label caught between
+  two dots, and then never rests: in a packed column every label is
+  squeezed a little, every label is pushed sideways a little, and the
+  picture boils. Labels in a pocket of dots too small for them go round in
+  it for ever.
+- *The same, but only where the squeeze is backed by something held*
+  (through a chain of rectangles, to a fixed point). Shorter leaders, and
+  it leaves ten to forty pairs overlapping at rest.
+- *Push along the line between centres, just far enough to clear*: labels
+  are left standing on dots (twelve to twenty of them), and it does not
+  rest either. *Take the largest push on each side instead of the sum*
+  changes little. (Choosing the axis by overlap relative to extent was not
+  tried.)
+- *Go through, the direction chosen by comparing the two sides only*: it
+  turns round as soon as it is deeper into the weaker side, and sits.
+- *Go through, the way it is already moving* (this rule): every one of the
+  four years comes to rest with no rectangle overlapping any other or any
+  dot, from every setting tried. The threshold on the velocity is there
+  because a velocity of 1e-13 left over from a movement long finished, or
+  the last of a pull, would otherwise choose the direction, and can choose
+  the side that is only touching: the rectangle then stands still on the
+  dot for hundreds of ticks.
+
+Its price is that it resolves a crowd by walking rectangles out of it: they
+end further from where they started than a placement that looked for the
+nearest gap would put them (see the labels demo's figures, in
+`purescript-hylograph-demos/force-labels`), and under a force that keeps
+pressing it does not hold at all. It is a finisher for when the pulls have
+cooled, not a constraint to lean on.
+
+**Containment** keeps a rectangle inside by its half-extents (`halfWidth`,
+`halfHeight`), as well as a circle by its radius: exactly, for a rectangular
+or polygonal region; by the circle round the rectangle, for a circular one.
+With half-extents of zero the arithmetic is what it was, to the bit.
+
+**The directional constraint** can be hard (`hard: true`): after the nodes
+have moved, each link short of its gap has its target moved along the axis
+by the shortfall (its source back, if the target is pinned along the axis
+and the source is not), in passes, until one moves nothing. Asked for 78 px
+as a force, it had kept as little as 46; hard, the gap asked for is the gap
+kept, to the rounding of one addition. The soft force is unchanged.
+
+`Forces.constrain` now runs the hard directional constraints with the hard
+containments, in the order the forces are listed, before the pins.
+
+One thing the optimising backend found: the reach of a rectangle towards a
+polygon's edge was first written `r + (|n.x| * w + |n.y| * h)`, and
+`purs-backend-es` prints a sum of sums without its brackets, which is a
+different rounding (two random graphs in 400 differed in the last digit).
+The rule is now `(r + |n.x| * w) + |n.y| * h` in both kernels, which no
+backend can regroup. It is the third time that backend has reordered
+arithmetic here; see the traps below.
+
+The timings in the next table were measured before these changes and have
+not been taken again.
 
 ### Time per tick, the forces d3 does not have
 
@@ -374,7 +469,7 @@ later is exposed to it.
 ## In hylograph-simulation
 
 This is the default kernel of `purescript-hylograph-simulation` (a path
-dependency there, since this package is unpublished): its
+dependency there until this package is published): its
 `Hylograph.ForceEngine.Core` wraps a `Force` as a recipe and a handle, and
 `Hylograph.ForceEngine.Setup.recipe` turns each force of a `Setup` into one.
 That library's `test/engine-parity.mjs` holds this kernel and the WASM kernel

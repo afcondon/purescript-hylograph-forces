@@ -4,8 +4,14 @@ workspace:
   extraPackages: {}
 
 package:
-  name: hylograph-forces-pure
-  description: "Spike: d3-force's forces ported to PureScript with no JavaScript for the algorithms"
+  name: hylograph-forces
+  description: "d3-force's forces, and six more, in pure PureScript: held to d3-force and to a Rust kernel bit for bit"
+  publish:
+    version: 0.1.0
+    license: MIT AND ISC
+    location:
+      githubOwner: afcondon
+      githubRepo: purescript-hylograph-forces
   dependencies:
     - arrays
     - effect

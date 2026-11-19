@@ -2,7 +2,7 @@
 -- |
 -- | Ported from d3-force 3.0.0, `radial.js` (ISC, Copyright 2010-2021 Mike
 -- | Bostock); see LICENSE.
-module Hylograph.Forces.Pure.Radial
+module Hylograph.Forces.Radial
   ( Config
   , defaultConfig
   , Radial
@@ -15,7 +15,7 @@ import Prelude
 import Data.Number (isNaN, sqrt)
 import Effect (Effect, foreachE)
 import Effect.Uncurried (runEffectFn3)
-import Hylograph.Forces.Pure.Node (Node, writeVelocity)
+import Hylograph.Forces.Node (Node, writeVelocity)
 
 -- | d3's `forceRadial` settings. `radius` and `strength` are asked once per
 -- | node when the force is initialized.

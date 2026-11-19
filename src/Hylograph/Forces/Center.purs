@@ -3,7 +3,7 @@
 -- |
 -- | Ported from d3-force 3.0.0, `center.js` (ISC, Copyright 2010-2021 Mike
 -- | Bostock); see LICENSE.
-module Hylograph.Forces.Pure.Center
+module Hylograph.Forces.Center
   ( Config
   , defaultConfig
   , Center
@@ -18,7 +18,7 @@ import Data.Int (toNumber)
 import Effect (Effect, foreachE)
 import Effect.Ref as Ref
 import Effect.Uncurried (runEffectFn3)
-import Hylograph.Forces.Pure.Node (Node, writePosition)
+import Hylograph.Forces.Node (Node, writePosition)
 
 -- | d3's `forceCenter` settings.
 type Config = { x :: Number, y :: Number, strength :: Number }

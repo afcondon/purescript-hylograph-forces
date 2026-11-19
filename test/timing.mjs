@@ -43,11 +43,11 @@ const compiled = {};
 for (const directory of outputDirectories) {
   const load = (module) => import(pathToFileURL(join(here, '..', directory, module, 'index.js')));
   compiled[directory] = {
-    Pure: await load('Hylograph.Forces.Pure'),
-    PureLink: await load('Hylograph.Forces.Pure.Link'),
-    PureRandom: await load('Hylograph.Forces.Pure.Random'),
-    PureManyBody: await load('Hylograph.Forces.Pure.ManyBody'),
-    PureGroup: await load('Hylograph.Forces.Pure.Group'),
+    Pure: await load('Hylograph.Forces'),
+    PureLink: await load('Hylograph.Forces.Link'),
+    PureRandom: await load('Hylograph.Forces.Random'),
+    PureManyBody: await load('Hylograph.Forces.ManyBody'),
+    PureGroup: await load('Hylograph.Forces.Group'),
   };
 }
 

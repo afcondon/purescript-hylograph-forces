@@ -16,7 +16,7 @@
 -- | Like d3, this looks only at the newest of several nodes at exactly the
 -- | same place; the older ones are not collided with until something else
 -- | moves them.
-module Hylograph.Forces.Pure.Collide
+module Hylograph.Forces.Collide
   ( Config
   , defaultConfig
   , Collide
@@ -33,11 +33,11 @@ import Data.Number (sqrt)
 import Effect (Effect, forE, foreachE, untilE)
 import Effect.Ref as Ref
 import Effect.Uncurried (runEffectFn3)
-import Hylograph.Forces.Pure.Node (Node, writeVelocity)
-import Hylograph.Forces.Pure.Quadtree (Point, Quadtree(..))
-import Hylograph.Forces.Pure.Quadtree as Quadtree
-import Hylograph.Forces.Pure.Random (Seed)
-import Hylograph.Forces.Pure.Random as Random
+import Hylograph.Forces.Node (Node, writeVelocity)
+import Hylograph.Forces.Quadtree (Point, Quadtree(..))
+import Hylograph.Forces.Quadtree as Quadtree
+import Hylograph.Forces.Random (Seed)
+import Hylograph.Forces.Random as Random
 
 -- | d3's `forceCollide` settings. `radius` is asked once per node when the
 -- | force is initialized.

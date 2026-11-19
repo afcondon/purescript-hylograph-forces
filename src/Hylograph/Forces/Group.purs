@@ -1,13 +1,11 @@
 -- | Which group a node is in, for the forces that act by group: cohesion
 -- | and scoped many-body.
-module Hylograph.Forces.Pure.Group
+module Hylograph.Forces.Group
   ( Membership(..)
   , ungrouped
   , inGroup
   , grouped
   ) where
-
-import Prelude
 
 import Data.Array (fromFoldable, snoc)
 import Data.Map as Map

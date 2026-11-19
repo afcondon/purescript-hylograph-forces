@@ -11,7 +11,7 @@
 -- | The Rust kernel has the same pair (`snapshot` and `restore` in
 -- | `force-kernel/src/lib.rs`), and `test/differential.mjs` checks both
 -- | against each other across a restore.
-module Hylograph.Forces.Pure.Snapshot
+module Hylograph.Forces.Snapshot
   ( Snapshot
   , take
   , restore
@@ -26,9 +26,9 @@ import Data.Tuple (Tuple(..))
 import Effect (Effect, foreachE)
 import Effect.Ref as Ref
 import Effect.Uncurried (runEffectFn3)
-import Hylograph.Forces.Pure.Node (Node, Pinnable, writePin, writePosition, writeVelocity)
-import Hylograph.Forces.Pure.Random (Seed)
-import Hylograph.Forces.Pure.Random as Random
+import Hylograph.Forces.Node (Node, Pinnable, writePin, writePosition, writeVelocity)
+import Hylograph.Forces.Random (Seed)
+import Hylograph.Forces.Random as Random
 
 -- | One node's state.
 type Kept = { x :: Number, y :: Number, vx :: Number, vy :: Number, fx :: Nullable Number, fy :: Nullable Number }

@@ -32,11 +32,11 @@ const ticksPerScenario = 300;
 const d3 = await import(pathToFileURL(join(homedir(), 'node_modules/d3-force/src/index.js')));
 const { default: d3Lcg } = await import(pathToFileURL(join(homedir(), 'node_modules/d3-force/src/lcg.js')));
 const compiled = (module) => import(pathToFileURL(join(here, '..', outputDirectory, module, 'index.js')));
-const Pure = await compiled('Hylograph.Forces.Pure');
-const PureLink = await compiled('Hylograph.Forces.Pure.Link');
-const PureRandom = await compiled('Hylograph.Forces.Pure.Random');
-const PureManyBody = await compiled('Hylograph.Forces.Pure.ManyBody');
-const PureGroup = await compiled('Hylograph.Forces.Pure.Group');
+const Pure = await compiled('Hylograph.Forces');
+const PureLink = await compiled('Hylograph.Forces.Link');
+const PureRandom = await compiled('Hylograph.Forces.Random');
+const PureManyBody = await compiled('Hylograph.Forces.ManyBody');
+const PureGroup = await compiled('Hylograph.Forces.Group');
 
 // A small seeded generator for the test's own choices (mulberry32), so that
 // every run of this file tests the same graphs.
@@ -370,7 +370,7 @@ for (const [name, build] of combinations) {
   const either = (await compiled('Data.Either')).either;
   const { ordInt } = await compiled('Data.Ord');
   const { showInt } = await compiled('Data.Show');
-  const PureTick = await compiled('Hylograph.Forces.Pure.Tick');
+  const PureTick = await compiled('Hylograph.Forces.Tick');
   const identify = (node) => node.id;
   const linkConfig = { distance: (link) => link.length, strength: PureLink.strengthFromDegree, iterations: 1 };
   for (const count of quick ? [2, 30] : [1, 2, 30, 300, 1000]) {

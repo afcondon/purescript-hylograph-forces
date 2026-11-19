@@ -2,7 +2,7 @@
 -- |
 -- | Ported from d3-force 3.0.0, `simulation.js` (ISC, Copyright 2010-2021
 -- | Mike Bostock); see LICENSE.
-module Hylograph.Forces.Pure.Tick
+module Hylograph.Forces.Tick
   ( defaultAlphaDecay
   , defaultVelocityRetention
   , cool
@@ -21,7 +21,7 @@ import Data.Nullable (toMaybe)
 import Data.Number (cos, isNaN, pi, pow, sin, sqrt)
 import Effect (Effect, foreachE)
 import Effect.Uncurried (runEffectFn2, runEffectFn3)
-import Hylograph.Forces.Pure.Node (Node, Pinnable, writeIndex, writePosition, writeVelocity)
+import Hylograph.Forces.Node (Node, Pinnable, writeIndex, writePosition, writeVelocity)
 
 -- | d3's default cooling rate: alpha falls from 1 to 0.001 in 300 ticks.
 defaultAlphaDecay :: Number

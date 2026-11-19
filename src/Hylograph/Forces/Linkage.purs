@@ -8,7 +8,7 @@
 -- | by an id read off each node (`joinById`). By place, a link that names a
 -- | place outside the array is dropped. By id, a link that names an id no
 -- | node has is an error, with d3's message.
-module Hylograph.Forces.Pure.Linkage
+module Hylograph.Forces.Linkage
   ( Endpoints
   , Identified
   , Joined
@@ -27,7 +27,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
-import Hylograph.Forces.Pure.Node (Node)
+import Hylograph.Forces.Node (Node)
 
 -- | A link, by the places of its two nodes in the node array.
 type Endpoints row = { source :: Int, target :: Int | row }

@@ -7,7 +7,7 @@
 -- | The generator is a pure step on a `Seed`, so the tree walks can thread it
 -- | as a loop variable; a `Source` is the same seed in a `Ref`, shared by the
 -- | forces of one simulation the way d3 shares one `random` function.
-module Hylograph.Forces.Pure.Random
+module Hylograph.Forces.Random
   ( Seed
   , Source
   , lcg

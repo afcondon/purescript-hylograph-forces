@@ -1,6 +1,7 @@
 {
-  "name": "hylograph-forces-pure",
+  "name": "hylograph-forces",
   "private": true,
+  "license": "MIT AND ISC",
   "type": "module",
   "description": "Spike: d3-force's forces in PureScript, held to d3-force bit for bit",
   "scripts": {

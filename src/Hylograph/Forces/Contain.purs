@@ -6,31 +6,40 @@
 -- | `apply_contain` and `constrain` in `force-kernel/src/forces.rs`), and the
 -- | two are held to each other bit for bit by `test/differential.mjs`.
 -- |
--- | **Projection.** `project region radius x y` is where a circle of that
--- | radius centred on (x, y) has to move its centre to, to lie inside the
--- | region. A centre already far enough inside comes back unchanged.
+-- | **The body.** A node is kept inside as a rectangle of half-width `w` and
+-- | half-height `h`, grown all round by a radius `r`: a circle when `w` and
+-- | `h` are zero, a plain rectangle when `r` is, a rounded rectangle
+-- | otherwise.
 -- |
--- | - Rectangle: confine x to `[x0 + radius, x1 - radius]` and y likewise. If
--- |   the rectangle is narrower than the circle on an axis, that coordinate
--- |   goes to the middle of the rectangle.
--- | - Circle: with `R' = max(R - radius, 0)`, a centre further than `R'`
--- |   from the region's centre `c` moves to `c + (p - c) * (R' / |p - c|)`.
--- | - Convex polygon: one pass visits the edges in order; for each, with `d`
--- |   the signed distance from the centre (as it now is) to the edge's line,
--- |   positive inside, a centre with `d < radius` moves along the inward
--- |   normal by `radius - d`. Passes repeat until one moves nothing, eight
--- |   at most.
+-- | **Projection.** `project region r w h x y` is where such a body centred
+-- | on (x, y) has to move its centre to, to lie inside the region. A centre
+-- | already far enough inside comes back unchanged.
+-- |
+-- | - Rectangle: clamp x to `[x0 + (r + w), x1 - (r + w)]` and y to
+-- |   `[y0 + (r + h), y1 - (r + h)]`. If the rectangle is narrower than the
+-- |   body on an axis, that coordinate goes to the middle of the rectangle.
+-- | - Circle: the body counts as the circle round it, of radius
+-- |   `r + sqrt(w*w + h*h)` (exact for a round body, a little cautious for a
+-- |   rectangle). With `R' = max(R - r - sqrt(w*w + h*h), 0)`, a centre
+-- |   further than `R'` from the region's centre `c` moves to
+-- |   `c + (p - c) * (R' / |p - c|)`.
+-- | - Convex polygon: one pass visits the edges in order; for each, with
+-- |   inward unit normal `n` and `d` the signed distance from the centre (as
+-- |   it now is) to the edge's line, positive inside, the body reaches
+-- |   `s = (r + |n.x| * w) + |n.y| * h` towards the edge, and a centre with
+-- |   `d < s` moves along the normal by `s - d`. Passes repeat until one
+-- |   moves nothing, eight at most.
 -- |
 -- | **Soft.** For every node with a region, with `a = position + velocity`
--- | finite and `c = project region radius a`: `v += (c - a) * strength`. Not
+-- | finite and `c = project region r w h a`: `v += (c - a) * strength`. Not
 -- | scaled by alpha: it is a constraint, like collide.
 -- |
 -- | **Hard.** After the nodes have moved, every node with a region and a
--- | finite position is put at `project region radius position`, and its
+-- | finite position is put at `project region r w h position`, and its
 -- | velocity changes by the same amount, so that the velocity is still the
 -- | step the node actually took. Pinned coordinates are then put back: a
 -- | pin beats a region.
-module Hylograph.Forces.Pure.Contain
+module Hylograph.Forces.Contain
   ( Region
   , rectangle
   , circle
@@ -53,10 +62,10 @@ import Data.Array (catMaybes, drop, length, take, zipWith)
 import Data.Foldable (foldl)
 import Data.List (List(..), fromFoldable)
 import Data.Maybe (Maybe(..))
-import Data.Number (isFinite, isNaN, sqrt)
+import Data.Number (abs, isFinite, isNaN, sqrt)
 import Effect (Effect, foreachE)
 import Effect.Uncurried (runEffectFn3)
-import Hylograph.Forces.Pure.Node (Node, writePosition, writeVelocity)
+import Hylograph.Forces.Node (Node, writePosition, writeVelocity)
 
 -- | A region nodes can be confined to. A polygon is held as its edges: a
 -- | point on each and the edge's inward unit normal, in the order the
@@ -109,15 +118,16 @@ polygon vertices = Polygon (fromFoldable edges)
         Just { x: side.from.x, y: side.from.y, normalX: -alongY / sideLength * sign, normalY: alongX / sideLength * sign }
       else Nothing
 
--- | Where a circle of the given radius centred on (x, y) has to move its
--- | centre to, to lie inside the region.
-project :: Region -> Number -> Number -> Number -> { x :: Number, y :: Number }
-project region radius x y = case region of
+-- | Where a body (radius, half-width, half-height) centred on (x, y) has to
+-- | move its centre to, to lie inside the region.
+project :: Region -> Number -> Number -> Number -> Number -> Number -> { x :: Number, y :: Number }
+project region radius halfWidth halfHeight x y = case region of
   Rectangle box ->
-    { x: confine radius box.x0 box.x1 x, y: confine radius box.y0 box.y1 y }
+    { x: confine (radius + halfWidth) box.x0 box.x1 x, y: confine (radius + halfHeight) box.y0 box.y1 y }
   Circle disc ->
     let
-      inner = if disc.radius - radius > 0.0 then disc.radius - radius else 0.0
+      reach = disc.radius - radius - sqrt (halfWidth * halfWidth + halfHeight * halfHeight)
+      inner = if reach > 0.0 then reach else 0.0
       offsetX = x - disc.x
       offsetY = y - disc.y
       distance2 = offsetX * offsetX + offsetY * offsetY
@@ -128,15 +138,15 @@ project region radius x y = case region of
         in
           { x: disc.x + offsetX * scale, y: disc.y + offsetY * scale }
       else { x, y }
-  Polygon edges -> passes edges radius 8 x y
+  Polygon edges -> passes edges radius halfWidth halfHeight 8 x y
 
--- | One coordinate into `[low + radius, high - radius]`, or to the middle
+-- | One coordinate into `[low + inset, high - inset]`, or to the middle
 -- | where that interval is empty.
 confine :: Number -> Number -> Number -> Number -> Number
-confine radius low high value =
+confine inset low high value =
   let
-    least = low + radius
-    most = high - radius
+    least = low + inset
+    most = high - inset
   in
     if least > most then (low + high) / 2.0
     else if value < least then least
@@ -145,28 +155,29 @@ confine radius low high value =
 
 -- | Up to `remaining` passes over a polygon's edges, stopping after the
 -- | first that moves nothing.
-passes :: List Edge -> Number -> Int -> Number -> Number -> { x :: Number, y :: Number }
-passes edges radius remaining x y =
+passes :: List Edge -> Number -> Number -> Number -> Int -> Number -> Number -> { x :: Number, y :: Number }
+passes edges radius halfWidth halfHeight remaining x y =
   if remaining <= 0 then { x, y }
   else
     let
-      after = pass edges radius x y false
+      after = pass edges radius halfWidth halfHeight x y false
     in
-      if after.moved then passes edges radius (remaining - 1) after.x after.y
+      if after.moved then passes edges radius halfWidth halfHeight (remaining - 1) after.x after.y
       else { x: after.x, y: after.y }
 
--- | One pass: each edge in turn pushes the centre inward if it is closer to
--- | that edge than the radius.
-pass :: List Edge -> Number -> Number -> Number -> Boolean -> { x :: Number, y :: Number, moved :: Boolean }
-pass edges radius x y moved = case edges of
+-- | One pass: each edge in turn pushes the centre inward if the body
+-- | reaches past it.
+pass :: List Edge -> Number -> Number -> Number -> Number -> Number -> Boolean -> { x :: Number, y :: Number, moved :: Boolean }
+pass edges radius halfWidth halfHeight x y moved = case edges of
   Nil -> { x, y, moved }
   Cons edge rest ->
     let
       inside = (x - edge.x) * edge.normalX + (y - edge.y) * edge.normalY
+      reach = radius + abs edge.normalX * halfWidth + abs edge.normalY * halfHeight
     in
-      if inside < radius then
-        pass rest radius (x + edge.normalX * (radius - inside)) (y + edge.normalY * (radius - inside)) true
-      else pass rest radius x y moved
+      if inside < reach then
+        pass rest radius halfWidth halfHeight (x + edge.normalX * (reach - inside)) (y + edge.normalY * (reach - inside)) true
+      else pass rest radius halfWidth halfHeight x y moved
 
 -- | Whether a node is confined, and to what.
 data Confinement
@@ -181,18 +192,21 @@ free = Free
 within :: Region -> Confinement
 within = Within
 
--- | `region` and `radius` are asked once per node when the force is
--- | initialized; a radius of `NaN` counts as zero. `strength` is the soft
+-- | `region`, `radius`, `halfWidth` and `halfHeight` are asked once per node
+-- | when the force is initialized; `NaN` for any of the three sizes counts
+-- | as zero. `strength` is the soft
 -- | force's (zero turns it off); `hard` adds the confine after the nodes move.
 type Config row =
   { region :: Node row -> Confinement
   , radius :: Node row -> Number
+  , halfWidth :: Node row -> Number
+  , halfHeight :: Node row -> Number
   , strength :: Number
   , hard :: Boolean
   }
 
 -- | A confined node.
-type Kept row = { node :: Node row, region :: Region, radius :: Number }
+type Kept row = { node :: Node row, region :: Region, radius :: Number, halfWidth :: Number, halfHeight :: Number }
 
 -- | An initialized containment.
 newtype Contain row = Contain { kept :: Array (Kept row), strength :: Number, hard :: Boolean }
@@ -207,10 +221,15 @@ initialize config nodes = Contain
   kept node = case config.region node of
     Free -> Nothing
     Within region ->
-      let
-        radius = config.radius node
-      in
-        Just { node, region, radius: if isNaN radius then 0.0 else radius }
+      Just
+        { node
+        , region
+        , radius: orZero (config.radius node)
+        , halfWidth: orZero (config.halfWidth node)
+        , halfHeight: orZero (config.halfHeight node)
+        }
+
+  orZero size = if isNaN size then 0.0 else size
 
 -- | The soft part, applied with the forces.
 apply :: forall row. Contain row -> Effect Unit
@@ -221,7 +240,7 @@ apply (Contain force) =
       aheadY = kept.node.y + kept.node.vy
     in
       when (isFinite aheadX && isFinite aheadY) do
-        let allowed = project kept.region kept.radius aheadX aheadY
+        let allowed = project kept.region kept.radius kept.halfWidth kept.halfHeight aheadX aheadY
         runEffectFn3 writeVelocity kept.node
           (kept.node.vx + (allowed.x - aheadX) * force.strength)
           (kept.node.vy + (allowed.y - aheadY) * force.strength)
@@ -238,7 +257,7 @@ constrain (Contain force) =
   when force.hard do
     foreachE force.kept \kept ->
       when (isFinite kept.node.x && isFinite kept.node.y) do
-        let allowed = project kept.region kept.radius kept.node.x kept.node.y
+        let allowed = project kept.region kept.radius kept.halfWidth kept.halfHeight kept.node.x kept.node.y
         runEffectFn3 writeVelocity kept.node
           (kept.node.vx + (allowed.x - kept.node.x))
           (kept.node.vy + (allowed.y - kept.node.y))

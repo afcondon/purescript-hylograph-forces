@@ -12,7 +12,7 @@
 -- |
 -- | A node whose target has a `NaN` in it is left alone, and a strength of
 -- | `NaN` counts as zero.
-module Hylograph.Forces.Pure.Towards
+module Hylograph.Forces.Towards
   ( Config
   , Towards
   , initialize
@@ -25,7 +25,7 @@ import Data.Array (filter)
 import Data.Number (isNaN)
 import Effect (Effect, foreachE)
 import Effect.Uncurried (runEffectFn3)
-import Hylograph.Forces.Pure.Node (Node, writeVelocity)
+import Hylograph.Forces.Node (Node, writeVelocity)
 
 -- | `target` and `strength` are asked once per node when the force is
 -- | initialized. To move the targets, initialize again.

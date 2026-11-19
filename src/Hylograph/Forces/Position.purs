@@ -2,7 +2,7 @@
 -- |
 -- | Ported from d3-force 3.0.0, `x.js` and `y.js` (ISC, Copyright 2010-2021
 -- | Mike Bostock); see LICENSE.
-module Hylograph.Forces.Pure.Position
+module Hylograph.Forces.Position
   ( Config
   , defaultConfig
   , Position
@@ -16,7 +16,7 @@ import Prelude
 import Data.Number (isNaN)
 import Effect (Effect, foreachE)
 import Effect.Uncurried (runEffectFn3)
-import Hylograph.Forces.Pure.Node (Node, writeVelocity)
+import Hylograph.Forces.Node (Node, writeVelocity)
 
 -- | d3's `forceX` / `forceY` settings. `target` and `strength` are asked
 -- | once per node when the force is initialized.

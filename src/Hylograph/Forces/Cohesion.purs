@@ -15,7 +15,7 @@
 -- | A node in no group is left alone and counts toward no centroid. A
 -- | strength of `NaN` counts as zero, and such a node still counts toward
 -- | its group's centroid.
-module Hylograph.Forces.Pure.Cohesion
+module Hylograph.Forces.Cohesion
   ( Config
   , Cohesion
   , initialize
@@ -28,8 +28,8 @@ import Data.Number (isFinite, isNaN)
 import Effect (Effect, foreachE)
 import Effect.Ref as Ref
 import Effect.Uncurried (runEffectFn3)
-import Hylograph.Forces.Pure.Group (Membership, grouped)
-import Hylograph.Forces.Pure.Node (Node, writeVelocity)
+import Hylograph.Forces.Group (Membership, grouped)
+import Hylograph.Forces.Node (Node, writeVelocity)
 
 -- | `group` and `strength` are asked once per node when the force is
 -- | initialized.

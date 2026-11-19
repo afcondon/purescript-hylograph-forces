@@ -42,17 +42,20 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
   const { default: init, Simulation } = await import(pathToFileURL(join(kernelDirectory, 'force_kernel.js')));
   await init({ module_or_path: readFileSync(join(kernelDirectory, 'force_kernel_bg.wasm')) });
 
-  const Pure = await compiled('Hylograph.Forces.Pure');
-  const PureLink = await compiled('Hylograph.Forces.Pure.Link');
-  const PureRandom = await compiled('Hylograph.Forces.Pure.Random');
-  const PureManyBody = await compiled('Hylograph.Forces.Pure.ManyBody');
-  const PureGroup = await compiled('Hylograph.Forces.Pure.Group');
-  const PureContain = await compiled('Hylograph.Forces.Pure.Contain');
-  const PureSnapshot = await compiled('Hylograph.Forces.Pure.Snapshot');
-  const PureMeasure = await compiled('Hylograph.Forces.Pure.Measure');
+  const Pure = await compiled('Hylograph.Forces');
+  const PureLink = await compiled('Hylograph.Forces.Link');
+  const PureRandom = await compiled('Hylograph.Forces.Random');
+  const PureManyBody = await compiled('Hylograph.Forces.ManyBody');
+  const PureGroup = await compiled('Hylograph.Forces.Group');
+  const PureContain = await compiled('Hylograph.Forces.Contain');
+  const PureSnapshot = await compiled('Hylograph.Forces.Snapshot');
+  const PureMeasure = await compiled('Hylograph.Forces.Measure');
+  const PureRect = await compiled('Hylograph.Forces.RectCollide');
+  const PureNode = await compiled('Hylograph.Forces.Node');
 
   const membership = (group) => (group < 0 ? PureGroup.ungrouped : PureGroup.inGroup(group));
   const groupIds = (nodes, group) => Uint32Array.from(nodes, (node) => (group(node) < 0 ? NONE : group(node)));
+  const rectPairs = { all: [0, PureRect.everyPair], within: [1, PureRect.withinGroups], between: [2, PureRect.betweenGroups] };
   const scopes = { all: [0, PureManyBody.everyPair], within: [1, PureManyBody.withinGroups], between: [2, PureManyBody.betweenGroups] };
 
   // A region, described once and built for both sides.
@@ -85,26 +88,37 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
       },
       pure: (random, nodes) => Pure.towards({ target, strength })(nodes),
     }),
-    rectCollide: ({ halfWidth, halfHeight, strength = 1, iterations = 1 }) => ({
+    // Pins are read from the nodes by both: a pinned rectangle is held.
+    rectCollide: ({ halfWidth, halfHeight, strength = 1, iterations = 1, include = null, pairs = 'all', group = always(-1), through = false }) => ({
       kernel: (sim, nodes) => {
         const id = sim.add_rect_collide(0, 0, strength, iterations);
         sim.set_force_half_widths(id, floats(nodes, halfWidth));
         sim.set_force_half_heights(id, floats(nodes, halfHeight));
+        if (include) sim.set_collide_filter(id, Uint8Array.from(nodes, (node) => (include(node) ? 1 : 0)));
+        sim.set_force_groups(id, groupIds(nodes, group));
+        sim.set_rect_collide_pairs(id, rectPairs[pairs][0]);
+        sim.set_rect_collide_through(id, through);
       },
-      pure: (random, nodes) => Pure.rectCollide({ halfWidth, halfHeight, strength, iterations })(nodes),
+      pure: (random, nodes) =>
+        Pure.rectCollide({
+          halfWidth, halfHeight, strength, iterations, include: include ?? always(true), pairs: rectPairs[pairs][1], group: (node) => membership(group(node)),
+          heldX: PureNode.pinnedX, heldY: PureNode.pinnedY, squeezed: through ? PureRect.goesThrough : PureRect.staysPut,
+        })(nodes),
     }),
     // `region(node)` is an index into `shapes`, or -1 for a node left free.
-    contain: ({ shapes, region = always(0), radius = always(0), strength = 1, hard = false }) => ({
+    contain: ({ shapes, region = always(0), radius = always(0), halfWidth = null, halfHeight = null, strength = 1, hard = false }) => ({
       kernel: (sim, nodes) => {
         const id = sim.add_containment(strength, hard);
         for (const shape of shapes) shape.kernel(sim, id);
         sim.set_force_regions(id, Uint32Array.from(nodes, (node) => (region(node) < 0 ? NONE : region(node))));
         sim.set_force_radii(id, floats(nodes, radius));
+        if (halfWidth) sim.set_force_half_widths(id, floats(nodes, halfWidth));
+        if (halfHeight) sim.set_force_half_heights(id, floats(nodes, halfHeight));
       },
       pure: (random, nodes) => {
         const built = shapes.map((shape) => shape.pure());
         const confinement = (node) => { const which = region(node); return which < 0 || which >= built.length ? PureContain.free : PureContain.within(built[which]); };
-        return Pure.contain({ region: confinement, radius, strength, hard })(nodes);
+        return Pure.contain({ region: confinement, radius, halfWidth: halfWidth ?? always(0), halfHeight: halfHeight ?? always(0), strength, hard })(nodes);
       },
     }),
     cohesion: ({ group, strength = always(0.1) }) => ({
@@ -125,13 +139,14 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
       pure: (random, nodes) =>
         Pure.manyBody({ strength, theta, distanceMin, distanceMax, scope: scopes[scope][1], group: (node) => membership(group(node)) })(random)(nodes),
     }),
-    directional: ({ gap = always(30), strength = always(1), axis = { x: 0, y: 1 }, iterations = 1 }) => ({
+    directional: ({ gap = always(30), strength = always(1), axis = { x: 0, y: 1 }, iterations = 1, hard = false }) => ({
       kernel: (sim, nodes, links) => {
         const id = sim.add_directional(0, axis.x, axis.y, 0, iterations);
         sim.set_force_gaps(id, floats(links, gap));
         sim.set_force_strengths(id, floats(links, strength));
+        sim.set_directional_hard(id, hard);
       },
-      pure: (random, nodes, links) => Pure.directional({ gap, strength, axis, iterations })(nodes)(links),
+      pure: (random, nodes, links) => Pure.directional({ gap, strength, axis, iterations, hard, heldX: PureNode.pinnedX, heldY: PureNode.pinnedY })(nodes)(links),
     }),
     // d3's forces, for the combinations. (The kernel has no degree-based link
     // strength, so a link strength is always given.)
@@ -270,6 +285,8 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
   const halfWidthOf = (node) => [6, 0, 12, 3][node.index % 4];        // some rectangles of zero width
   const halfHeightOf = (node) => [4, 0, 2, 9][node.index % 4];
   const radiusOf = (node) => 3 + (node.index % 5);
+  const labelWidthOf = (node) => (node.index % 4 === 0 ? 3 : 14 + (node.index % 5) * 6);  // small squares among wide labels
+  const labelHeightOf = (node) => (node.index % 4 === 0 ? 3 : 6);
   const gapOf = (link) => 10 + (link.source % 3) * 15;
   const stiffnessOf = (link) => [1, 0.4, 0][link.target % 3];
 
@@ -298,6 +315,17 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
       ['mixed sizes, some zero', () => [forces.rectCollide({ halfWidth: halfWidthOf, halfHeight: halfHeightOf })]],
       ['all the same, strength 0.6, three iterations', () => [forces.rectCollide({ halfWidth: always(5), halfHeight: always(5), strength: 0.6, iterations: 3 })]],
       ['all zero-area', () => [forces.rectCollide({ halfWidth: always(0), halfHeight: always(8) })]],
+      ['two thirds of the rectangles collide', () => [forces.rectCollide({ halfWidth: halfWidthOf, halfHeight: halfHeightOf, include: (node) => node.index % 3 !== 0 })]],
+      ['only within groups, two iterations', () => [forces.rectCollide({ halfWidth: always(7), halfHeight: always(4), iterations: 2, pairs: 'within', group: groupOf })]],
+      ['only between groups, a filter too', () => [forces.rectCollide({ halfWidth: halfWidthOf, halfHeight: halfHeightOf, pairs: 'between', group: twoGroups, include: (node) => node.index % 7 !== 0 })]],
+      ['within groups, nobody grouped', () => [forces.rectCollide({ halfWidth: always(7), halfHeight: always(4), pairs: 'within', group: noGroup })]],
+      ['nobody collides', () => [forces.rectCollide({ halfWidth: always(7), halfHeight: always(4), include: always(false), through: true })]],
+      ['squeezed goes through, mixed sizes, four iterations', () => [forces.rectCollide({ halfWidth: halfWidthOf, halfHeight: halfHeightOf, iterations: 4, through: true })]],
+      ['squeezed goes through, strength 0.6, one iteration', () => [forces.rectCollide({ halfWidth: always(9), halfHeight: always(3), strength: 0.6, through: true })]],
+      ['crowded wide boxes: labels among small ones, through', () => [forces.rectCollide({ halfWidth: labelWidthOf, halfHeight: labelHeightOf, iterations: 4, through: true })]],
+      ['crowded wide boxes pulled to their slots, through', () => [forces.towards({ target: slotOf, strength: always(0.3) }), forces.rectCollide({ halfWidth: labelWidthOf, halfHeight: labelHeightOf, iterations: 4, through: true })]],
+      ['crowded wide boxes pulled to where they are, wedged', () => [forces.towards({ target: hereOf, strength: always(0.3) }), forces.rectCollide({ halfWidth: labelWidthOf, halfHeight: labelHeightOf, iterations: 3 })]],
+      ['labels against dots only (between groups), through, kept in a box', () => [forces.rectCollide({ halfWidth: labelWidthOf, halfHeight: labelHeightOf, iterations: 2, through: true, pairs: 'between', group: (node) => (node.index % 4 === 0 ? 0 : 1) }), forces.contain({ shapes: [flippedBox], halfWidth: labelWidthOf, halfHeight: labelHeightOf, hard: true })]],
     ],
     containment: [
       ['soft, box on the lattice', () => [forces.contain({ shapes: [box] })]],
@@ -306,6 +334,10 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
       ['soft and hard, hexagon', () => [forces.contain({ shapes: [hexagon], radius: always(2), strength: 0.5, hard: true })]],
       ['hard, square with vertices on the lattice', () => [forces.contain({ shapes: [square], hard: true })]],
       ['hard, clockwise triangle, radius 1', () => [forces.contain({ shapes: [triangle], radius: always(1), hard: true })]],
+      ['rectangles in a flipped box, soft and hard', () => [forces.contain({ shapes: [flippedBox], halfWidth: halfWidthOf, halfHeight: halfHeightOf, strength: 0.5, hard: true })]],
+      ['rounded rectangles in a hexagon, hard', () => [forces.contain({ shapes: [hexagon], radius: always(2), halfWidth: labelWidthOf, halfHeight: labelHeightOf, strength: 0, hard: true })]],
+      ['rectangles in a disc, soft', () => [forces.contain({ shapes: [disc], radius: radiusOf, halfWidth: halfWidthOf, halfHeight: halfHeightOf, strength: 0.7 })]],
+      ['rectangles, regions per node, lattice box and triangle', () => [forces.contain({ shapes: [box, triangle, smallDisc, sliver], region: regionOf, halfWidth: always(1), halfHeight: always(0.5), hard: true })]],
       ['regions per node: box, sliver, small disc; some free', () => [forces.contain({ shapes: [box, sliver, smallDisc], region: regionOf, radius: radiusOf, strength: 0.7, hard: true })]],
       ['zero-area and degenerate regions', () => [forces.contain({ shapes: [dot, flat, twoPoints, disc], region: regionOf, strength: 1, hard: true })]],
     ],
@@ -337,6 +369,11 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
   };
 
   const combinations = [
+    ['hard directional alone', () => [forces.directional({ gap: gapOf, strength: always(0), hard: true })]],
+    ['hard directional, slanted axis, with the soft force', () => [forces.directional({ gap: always(25), strength: stiffnessOf, axis: { x: -2, y: 5 }, iterations: 2, hard: true })]],
+    ['hard directional sideways + many-body + link', () => [forces.manyBody({ strength: always(-40) }), forces.link({ distance: gapOf }), forces.directional({ gap: always(18), strength: always(1), axis: { x: 1, y: 0 }, hard: true })]],
+    ['hard directional, then hard containment of rectangles, then rect collide through', () => [forces.directional({ gap: always(12), strength: always(0.5), hard: true }), forces.contain({ shapes: [flippedBox], halfWidth: halfWidthOf, halfHeight: halfHeightOf, hard: true }), forces.rectCollide({ halfWidth: halfWidthOf, halfHeight: halfHeightOf, iterations: 2, through: true }), forces.x({ strength: always(0.05) })]],
+    ['labels: towards + rect collide through + containment by half-extents', () => [forces.towards({ target: slotOf, strength: always(0.3) }), forces.rectCollide({ halfWidth: labelWidthOf, halfHeight: labelHeightOf, iterations: 4, through: true }), forces.contain({ shapes: [flippedBox], halfWidth: labelWidthOf, halfHeight: labelHeightOf, hard: true })]],
     ['towards + rect collide + containment', () => [forces.towards({ target: slotOf, strength: always(0.2) }), forces.rectCollide({ halfWidth: halfWidthOf, halfHeight: halfHeightOf, iterations: 2 }), forces.contain({ shapes: [flippedBox], radius: radiusOf, hard: true })]],
     ['many-body + link + centre + containment (hard, disc)', () => [forces.manyBody(), forces.link(), forces.center(), forces.contain({ shapes: [disc], radius: radiusOf, strength: 0.5, hard: true })]],
     ['between-group many-body + cohesion + collide', () => [forces.manyBody({ scope: 'between', group: groupOf }), forces.cohesion({ group: groupOf, strength: always(0.3) }), forces.collide({ radius: radiusOf })]],
@@ -349,13 +386,22 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
   ];
 
   const sizes = quick ? [2, 10, 100] : [1, 2, 10, 100, 1000];
+  // Rectangles that stay crowded (pulled together, or kept in a small box)
+  // cost a million pairs an iteration at a thousand nodes, for 300 ticks,
+  // on each side. Those scenarios are run up to 100 nodes; at a thousand
+  // the crowd is run once per spread-out layout, free to come apart.
+  const crowdedOut = (name, count, layout) =>
+    count >= 1000 && /crowded|through|labels/.test(name)
+      && !(name.startsWith('crowded wide boxes: labels among small ones') && ['spiral', 'scattered', 'line'].includes(layout));
   const layoutNames = Object.keys(layouts);
   const ticks = 300;
 
   for (const [group, variants] of Object.entries(single)) {
+    process.stderr.write(`${new Date().toISOString().slice(11, 19)} ${group}\n`);
     for (const [variant, build] of variants) {
       for (const count of sizes) {
         for (const layout of layoutNames) {
+          if (crowdedOut(variant, count, layout)) continue;
           for (const moving of [false, true]) {
             const random = mulberry(count * 37 + layoutNames.indexOf(layout) * 11 + (moving ? 1 : 0));
             const nodes = makeNodes(count, layout, random, { moving, pinned: moving ? 0.1 : 0 });
@@ -369,6 +415,7 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
   for (const [name, build] of combinations) {
     for (const count of sizes) {
       for (const layout of layoutNames) {
+        if (crowdedOut(name, count, layout)) continue;
         for (const pinned of [0, 0.15]) {
           const random = mulberry(count * 139 + layoutNames.indexOf(layout) * 19 + (pinned ? 3 : 0));
           const nodes = makeNodes(count, layout, random, { pinned });
@@ -381,7 +428,7 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
   if (!quick) {
     const count = 10000;
     const nodes = makeNodes(count, 'spiral', mulberry(3));
-    for (const [name, build] of [combinations[1], combinations[4]]) {
+    for (const [name, build] of [combinations[6], combinations[9], combinations[2]]) {
       record('new + d3 combined (kernel)', `${name}, 10000 spiral, 60 ticks`, count, run({ nodes, links: ringWithChords(count), forceList: build(), ticks: 60 }));
     }
   }
@@ -415,6 +462,37 @@ export const runKernelScenarios = async ({ compiled, record, quick, mulberry, la
       const forceList = order.slice(0, 1 + Math.floor(random() * 6)).map((build) => build());
       const settings = { alphaTarget: pick([0, 0, 0.3]), alphaDecay: pick([defaults.alphaDecay, 0.05]), velocityRetention: pick([0.6, 0.6, 0.9, 0.3]) };
       record('random graphs (kernel)', `graph ${graph}`, count, run({ nodes, links, forceList, settings, ticks }));
+    }
+  }
+
+  // Random graphs again, drawing on the options added since: who collides,
+  // held rectangles (the pins), the squeeze, rectangles kept in regions, and
+  // hard directional constraints.
+  {
+    const random = mulberry(20261118);
+    const pick = (list) => list[Math.floor(random() * list.length)];
+    const graphs = quick ? 60 : 400;
+    for (let graph = 0; graph < graphs; graph++) {
+      const count = 1 + Math.floor(random() * 150);
+      const nodes = makeNodes(count, pick(layoutNames), random, { moving: random() < 0.5, pinned: pick([0, 0.1, 0.3]) });
+      const links = randomLinks(count, Math.floor(random() * 2 * count), random);
+      const grouping = pick([groupOf, twoGroups, noGroup, oneGroup]);
+      const shape = pick([[box], [flippedBox], [disc], [hexagon], [square, triangle, smallDisc], [sliver, dot, flat, disc]]);
+      const sizes = pick([[halfWidthOf, halfHeightOf], [labelWidthOf, labelHeightOf], [always(random() * 12), always(random() * 6)]]);
+      const available = [
+        () => forces.rectCollide({ halfWidth: sizes[0], halfHeight: sizes[1], strength: pick([1, 1, 0.7]), iterations: pick([1, 2, 4]), through: random() < 0.7, pairs: pick(['all', 'all', 'within', 'between']), group: grouping, include: pick([null, null, (node) => node.index % 3 !== 0]) }),
+        () => forces.contain({ shapes: shape, region: shape.length > 1 ? regionOf : always(0), radius: pick([always(0), radiusOf]), halfWidth: sizes[0], halfHeight: sizes[1], strength: pick([0, 0.3, 1]), hard: random() < 0.6 }),
+        () => forces.directional({ gap: pick([gapOf, always(random() * 40 - 5)]), strength: pick([stiffnessOf, always(random()), always(0)]), axis: pick([{ x: 0, y: 1 }, { x: 1, y: 0 }, { x: -2, y: 5 }, { x: 0, y: 0 }]), iterations: pick([1, 2]), hard: random() < 0.8 }),
+        () => forces.towards({ target: pick([slotOf, hereOf, someTargets]), strength: pick([pullOf, always(random() * 0.5)]) }),
+        () => forces.manyBody({ strength: pick([chargeOf, always(-60 * random())]), theta: pick([0, 0.9]) }),
+        () => forces.link({ distance: pick([always(30), (link) => link.length]), strength: pick([always(0.5), (link) => link.weight]) }),
+        () => forces.x({ target: always(pick([0, 25])), strength: always(random() * 0.3) }),
+        () => forces.y({ target: always(pick([0, -25])), strength: always(random() * 0.3) }),
+      ];
+      const order = available.map((build) => [random(), build]).sort((a, b) => a[0] - b[0]).map(([, build]) => build);
+      const forceList = order.slice(0, 1 + Math.floor(random() * 5)).map((build) => build());
+      const settings = { alphaTarget: pick([0, 0, 0.3]), alphaDecay: pick([defaults.alphaDecay, 0.05]), velocityRetention: pick([0.6, 0.4, 0.9]) };
+      record('random graphs, later options (kernel)', `graph ${graph}`, count, run({ nodes, links, forceList, settings, ticks }));
     }
   }
 };

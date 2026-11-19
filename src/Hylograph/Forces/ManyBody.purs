@@ -20,7 +20,7 @@
 -- | to go to when the square is finished with (`after`), so "visit, and skip
 -- | the children if the callback says so" becomes a loop that follows one
 -- | pointer or the other.
-module Hylograph.Forces.Pure.ManyBody
+module Hylograph.Forces.ManyBody
   ( Config
   , defaultConfig
   , Scope
@@ -41,12 +41,12 @@ import Data.Number (abs, infinity, sqrt)
 import Effect (Effect, foreachE)
 import Effect.Ref as Ref
 import Effect.Uncurried (runEffectFn3)
-import Hylograph.Forces.Pure.Group (Membership(..), grouped)
-import Hylograph.Forces.Pure.Node (Node, writeVelocity)
-import Hylograph.Forces.Pure.Quadtree (Point, Quadtree(..))
-import Hylograph.Forces.Pure.Quadtree as Quadtree
-import Hylograph.Forces.Pure.Random (Seed)
-import Hylograph.Forces.Pure.Random as Random
+import Hylograph.Forces.Group (Membership(..), grouped)
+import Hylograph.Forces.Node (Node, writeVelocity)
+import Hylograph.Forces.Quadtree (Point, Quadtree(..))
+import Hylograph.Forces.Quadtree as Quadtree
+import Hylograph.Forces.Random (Seed)
+import Hylograph.Forces.Random as Random
 
 -- | d3's `forceManyBody` settings. `strength` is asked once per node when the
 -- | force is initialized; negative repels.

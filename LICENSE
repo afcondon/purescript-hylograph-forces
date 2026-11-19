@@ -22,10 +22,15 @@ SOFTWARE.
 
 ---
 
-This software is a port of d3-force 3.0.0 (the forces, the random source and
-the tick of the simulation: every module under src/Hylograph/Forces/Pure) and
-of the part of d3-quadtree 3.0.1 that d3-force uses
-(Hylograph.Forces.Pure.Quadtree). Both are licensed under the ISC License:
+Portions of this software are ported from d3-force 3.0.0 (the many-body,
+link, collide, center, x, y and radial forces, the random source, and the
+tick of the simulation: Hylograph.Forces.ManyBody, .Link, .Linkage, .Collide,
+.Center, .Position, .Radial, .Random and .Tick, with the parts of
+Hylograph.Forces that put them together) and from the part of d3-quadtree
+3.0.1 that d3-force uses (Hylograph.Forces.Quadtree). Each of those files
+says so at its head. Both are licensed under the ISC License:
+
+ISC License:
 
 ISC License
 

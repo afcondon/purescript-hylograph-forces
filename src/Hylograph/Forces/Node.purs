@@ -12,18 +12,21 @@
 -- | arguments of the write that replaces it or inside a pure function that
 -- | returns before anything is written. It is never bound to a name across a
 -- | write.
-module Hylograph.Forces.Pure.Node
+module Hylograph.Forces.Node
   ( Node
   , Pinnable
   , writeVelocity
   , writePosition
   , writePin
   , writeIndex
+  , pinnedX
+  , pinnedY
   ) where
 
 import Prelude
 
-import Data.Nullable (Nullable)
+import Data.Maybe (Maybe(..))
+import Data.Nullable (Nullable, toMaybe)
 import Effect.Uncurried (EffectFn2, EffectFn3)
 
 -- | A node of the simulation: position and velocity, and whatever else the
@@ -48,3 +51,15 @@ foreign import writePin :: forall row. EffectFn3 (Node (Pinnable row)) (Nullable
 -- | every node whether or not the application's node type has a field for
 -- | it, and so does this: the row is not asked to contain `index`.
 foreign import writeIndex :: forall row. EffectFn2 (Node row) Int Unit
+
+-- | Is the node pinned in x? A function of the node as it is when asked:
+-- | ask inside the effect, not before it.
+pinnedX :: forall row. Node (Pinnable row) -> Boolean
+pinnedX node = case toMaybe node.fx of
+  Just _ -> true
+  Nothing -> false
+
+pinnedY :: forall row. Node (Pinnable row) -> Boolean
+pinnedY node = case toMaybe node.fy of
+  Just _ -> true
+  Nothing -> false

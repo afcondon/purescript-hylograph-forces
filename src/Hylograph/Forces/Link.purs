@@ -8,7 +8,7 @@
 -- | or by an id read off each node (`initializeById`, which is d3's
 -- | `force.id(...)` and gives d3's error for a link to a node that is not
 -- | there).
-module Hylograph.Forces.Pure.Link
+module Hylograph.Forces.Link
   ( Config
   , Strength
   , strengthFromDegree
@@ -27,10 +27,10 @@ import Data.Either (Either)
 import Data.Number (sqrt)
 import Effect (Effect, forE, foreachE)
 import Effect.Uncurried (EffectFn4, mkEffectFn4, runEffectFn3, runEffectFn4)
-import Hylograph.Forces.Pure.Linkage (Endpoints, Identified) as Linkage
-import Hylograph.Forces.Pure.Linkage (Joined, joinByPlace, joinById)
-import Hylograph.Forces.Pure.Node (Node, writeVelocity)
-import Hylograph.Forces.Pure.Random as Random
+import Hylograph.Forces.Linkage (Endpoints, Identified) as Linkage
+import Hylograph.Forces.Linkage (Joined, joinByPlace, joinById)
+import Hylograph.Forces.Node (Node, writeVelocity)
+import Hylograph.Forces.Random as Random
 
 -- | How stiff each spring is.
 data Strength link

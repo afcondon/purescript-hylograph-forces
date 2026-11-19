@@ -35,11 +35,12 @@ const compiled = {};
 for (const directory of outputDirectories) {
   const load = (module) => import(pathToFileURL(join(here, '..', directory, module, 'index.js')));
   compiled[directory] = {
-    Pure: await load('Hylograph.Forces.Pure'),
-    Random: await load('Hylograph.Forces.Pure.Random'),
-    ManyBody: await load('Hylograph.Forces.Pure.ManyBody'),
-    Group: await load('Hylograph.Forces.Pure.Group'),
-    Contain: await load('Hylograph.Forces.Pure.Contain'),
+    Pure: await load('Hylograph.Forces'),
+    Random: await load('Hylograph.Forces.Random'),
+    ManyBody: await load('Hylograph.Forces.ManyBody'),
+    Group: await load('Hylograph.Forces.Group'),
+    Contain: await load('Hylograph.Forces.Contain'),
+    Rect: await load('Hylograph.Forces.RectCollide'),
   };
 }
 
@@ -67,11 +68,11 @@ const cases = {
   },
   'rect collide': {
     kernel: (sim, nodes) => { const id = sim.add_rect_collide(0, 4, 1, 1); sim.set_force_half_widths(id, floats(nodes, halfWidth)); },
-    pure: ({ Pure }, random, nodes) => [Pure.rectCollide({ halfWidth, halfHeight: () => 4, strength: 1, iterations: 1 })(nodes)],
+    pure: ({ Pure, Rect, Group }, random, nodes) => [Pure.rectCollide({ halfWidth, halfHeight: () => 4, strength: 1, iterations: 1, include: () => true, pairs: Rect.everyPair, group: () => Group.ungrouped, heldX: () => false, heldY: () => false, squeezed: Rect.staysPut })(nodes)],
   },
   'containment (disc, soft + hard)': {
     kernel: (sim, nodes) => { const id = sim.add_containment(0.5, true); sim.containment_add_circle(id, 0, 0, 8 * Math.sqrt(nodes.length)); sim.set_force_radii(id, floats(nodes, () => 3)); },
-    pure: ({ Pure, Contain }, random, nodes) => { const disc = Contain.within(Contain.circle(0)(0)(8 * Math.sqrt(nodes.length))); return [Pure.contain({ region: () => disc, radius: () => 3, strength: 0.5, hard: true })(nodes)]; },
+    pure: ({ Pure, Contain }, random, nodes) => { const disc = Contain.within(Contain.circle(0)(0)(8 * Math.sqrt(nodes.length))); return [Pure.contain({ region: () => disc, radius: () => 3, halfWidth: () => 0, halfHeight: () => 0, strength: 0.5, hard: true })(nodes)]; },
   },
   'cohesion (8 groups)': {
     kernel: (sim, nodes) => { const id = sim.add_cohesion(0.1); sim.set_force_groups(id, Uint32Array.from(nodes, groupOf)); },
@@ -87,7 +88,7 @@ const cases = {
   },
   directional: {
     kernel: (sim) => { sim.add_directional(30, 0, 1, 1, 1); },
-    pure: ({ Pure }, random, nodes, links) => [Pure.directional({ gap: () => 30, strength: () => 1, axis: { x: 0, y: 1 }, iterations: 1 })(nodes)(links)],
+    pure: ({ Pure }, random, nodes, links) => [Pure.directional({ gap: () => 30, strength: () => 1, axis: { x: 0, y: 1 }, iterations: 1, hard: false, heldX: () => false, heldY: () => false })(nodes)(links)],
   },
 };
 cases['all of the above'] = {

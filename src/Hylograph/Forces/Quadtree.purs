@@ -17,7 +17,7 @@
 -- | The squares themselves are not stored. A force recomputes them as it
 -- | walks, halving from the root's extent with the same `(x0 + x1) / 2` that
 -- | d3's `visit` uses, so the bounds agree to the bit.
-module Hylograph.Forces.Pure.Quadtree
+module Hylograph.Forces.Quadtree
   ( Point
   , Quadtree(..)
   , Extent

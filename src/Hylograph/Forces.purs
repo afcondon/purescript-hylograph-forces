@@ -1,15 +1,18 @@
 -- | d3-force's forces in PureScript, with no JavaScript for the algorithms,
--- | and the six things the Rust kernel has that d3 does not.
+-- | and what the Rust kernel has that d3 does not.
 -- |
--- | A spike. Each force has its own module with an `initialize` and an
--- | `apply`; this module gathers them into one `Force` type and gives the
--- | loop that `Hylograph.ForceEngine.Core` runs today around d3's functions:
--- | cool, apply each force, move the nodes, and then (the Rust kernel's
--- | addition) apply any hard containment and put pinned nodes back.
+-- | Each force has its own module with an `initialize` and an `apply`; this
+-- | module gathers them into one `Force` type and gives d3's loop: cool,
+-- | apply each force, move the nodes, and then (the Rust kernel's addition)
+-- | apply any hard constraint and put pinned nodes back.
 -- |
 -- | The d3 forces are held to d3-force 3.0.0 bit for bit, and the others to
 -- | the Rust kernel built at 64 bits, by `test/differential.mjs`.
-module Hylograph.Forces.Pure
+-- |
+-- | `tick`, `applyForces` and the order of a tick are ported from d3-force
+-- | 3.0.0, `simulation.js` (ISC, Copyright 2010-2021 Mike Bostock); see
+-- | LICENSE.
+module Hylograph.Forces
   ( Force
   , manyBody
   , link
@@ -38,31 +41,31 @@ import Prelude
 import Data.Array (any)
 import Data.Either (Either)
 import Effect (Effect, foreachE)
-import Hylograph.Forces.Pure.Center (Center)
-import Hylograph.Forces.Pure.Center as Center
-import Hylograph.Forces.Pure.Collide (Collide)
-import Hylograph.Forces.Pure.Cohesion (Cohesion)
-import Hylograph.Forces.Pure.Cohesion as Cohesion
-import Hylograph.Forces.Pure.Collide as Collide
-import Hylograph.Forces.Pure.Contain (Contain)
-import Hylograph.Forces.Pure.Contain as Contain
-import Hylograph.Forces.Pure.Directional (Directional)
-import Hylograph.Forces.Pure.Directional as Directional
-import Hylograph.Forces.Pure.Link (Link)
-import Hylograph.Forces.Pure.Link as Link
-import Hylograph.Forces.Pure.ManyBody (ManyBody)
-import Hylograph.Forces.Pure.ManyBody as ManyBody
-import Hylograph.Forces.Pure.Node (Node, Pinnable)
-import Hylograph.Forces.Pure.Position (Position)
-import Hylograph.Forces.Pure.Position as Position
-import Hylograph.Forces.Pure.Radial (Radial)
-import Hylograph.Forces.Pure.Radial as Radial
-import Hylograph.Forces.Pure.Random as Random
-import Hylograph.Forces.Pure.RectCollide (RectCollide)
-import Hylograph.Forces.Pure.RectCollide as RectCollide
-import Hylograph.Forces.Pure.Tick as Tick
-import Hylograph.Forces.Pure.Towards (Towards)
-import Hylograph.Forces.Pure.Towards as Towards
+import Hylograph.Forces.Center (Center)
+import Hylograph.Forces.Center as Center
+import Hylograph.Forces.Collide (Collide)
+import Hylograph.Forces.Cohesion (Cohesion)
+import Hylograph.Forces.Cohesion as Cohesion
+import Hylograph.Forces.Collide as Collide
+import Hylograph.Forces.Contain (Contain)
+import Hylograph.Forces.Contain as Contain
+import Hylograph.Forces.Directional (Directional)
+import Hylograph.Forces.Directional as Directional
+import Hylograph.Forces.Link (Link)
+import Hylograph.Forces.Link as Link
+import Hylograph.Forces.ManyBody (ManyBody)
+import Hylograph.Forces.ManyBody as ManyBody
+import Hylograph.Forces.Node (Node, Pinnable)
+import Hylograph.Forces.Position (Position)
+import Hylograph.Forces.Position as Position
+import Hylograph.Forces.Radial (Radial)
+import Hylograph.Forces.Radial as Radial
+import Hylograph.Forces.Random as Random
+import Hylograph.Forces.RectCollide (RectCollide)
+import Hylograph.Forces.RectCollide as RectCollide
+import Hylograph.Forces.Tick as Tick
+import Hylograph.Forces.Towards (Towards)
+import Hylograph.Forces.Towards as Towards
 
 -- | An initialized force of any kind.
 data Force row
@@ -134,7 +137,7 @@ cohesion config nodes = CohesionForce (Cohesion.initialize config nodes)
 
 directional
   :: forall row linkRow
-   . Directional.Config (Link.Endpoints linkRow)
+   . Directional.Config row (Link.Endpoints linkRow)
   -> Array (Node row)
   -> Array (Link.Endpoints linkRow)
   -> Force row
@@ -145,7 +148,7 @@ directionalById
    . Ord id
   => Show id
   => (Node row -> id)
-  -> Directional.Config (Link.Identified id linkRow)
+  -> Directional.Config row (Link.Identified id linkRow)
   -> Array (Node row)
   -> Array (Link.Identified id linkRow)
   -> Either String (Force row)
@@ -172,20 +175,23 @@ applyForces :: forall row. Number -> Array (Force row) -> Effect Unit
 applyForces alpha forces = foreachE forces (applyForce alpha)
 
 -- | The part of the forces that runs after the nodes have moved: every hard
--- | containment clamps its nodes into their regions, in the order the forces
--- | are listed, and then, if anything clamped, pinned coordinates are put
--- | back, so that a pin beats a region. Nothing at all where no force is a
--- | hard containment.
+-- | containment clamps its nodes into their regions and every hard
+-- | directional constraint projects its links, in the order the forces are
+-- | listed, and then, if any force was hard, pinned coordinates are put
+-- | back, so that a pin beats them all. Nothing at all where no force is
+-- | hard.
 constrain :: forall row. Array (Force (Pinnable row)) -> Array (Node (Pinnable row)) -> Effect Unit
 constrain forces nodes =
-  when (any clamps forces) do
+  when (any hard forces) do
     foreachE forces \force -> case force of
       ContainForce state -> Contain.constrain state
+      DirectionalForce state -> Directional.constrain state
       _ -> pure unit
     Tick.pin nodes
   where
-  clamps force = case force of
+  hard force = case force of
     ContainForce state -> Contain.isHard state
+    DirectionalForce state -> Directional.isHard state
     _ -> false
 
 -- | The settings of a tick that are not forces.

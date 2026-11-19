@@ -6,7 +6,7 @@
 -- | Kinetic energy is read off the nodes. The other three need to know
 -- | where the nodes were, so they are kept by a `Watch`: tell it when a tick
 -- | begins and when it ends, and ask it afterwards.
-module Hylograph.Forces.Pure.Measure
+module Hylograph.Forces.Measure
   ( kineticEnergy
   , Watch
   , watch
@@ -25,7 +25,7 @@ import Data.Number (sqrt)
 import Effect (Effect, foreachE)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
-import Hylograph.Forces.Pure.Node (Node)
+import Hylograph.Forces.Node (Node)
 
 -- | Kinetic energy, taking every node to have unit mass: the sum over the
 -- | nodes, in order, of `vx * vx` and then `vy * vy`, halved. After a tick
