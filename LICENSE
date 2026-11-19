@@ -30,8 +30,6 @@ Hylograph.Forces that put them together) and from the part of d3-quadtree
 3.0.1 that d3-force uses (Hylograph.Forces.Quadtree). Each of those files
 says so at its head. Both are licensed under the ISC License:
 
-ISC License:
-
 ISC License
 
 Copyright 2010-2021 Mike Bostock
