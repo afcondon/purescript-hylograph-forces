@@ -354,6 +354,23 @@ for (const [name, build] of combinations) {
   }
 }
 
+// A node at NaN that exerts nothing (index 6, strength zero under chargeOf):
+// it still shapes the octree, which d3-octree inserts it into at (0, 0, 0)
+// and then splits by its own NaN coordinates, so every other node's numbers
+// stay finite and still depend on where it went. The lattice and the heap put
+// valid nodes exactly at the origin too.
+for (const layout of ['scattered', 'lattice', 'heap', 'pairs', 'plane']) {
+  for (const [which, spoil] of [['x', (node) => { node.x = NaN; }], ['z', (node) => { node.z = NaN; }]]) {
+    for (const count of quick ? [30] : [30, 300]) {
+      attempt('many-body', `per-node strength, node 6 at NaN ${which} with strength 0, ${count} ${layout}`, count, 'manyBody', () => {
+        const nodes = makeNodes(count, layout, mulberry(count + 6));
+        spoil(nodes[6]);
+        return run({ nodes, forceList: [forces.manyBody({ strength: chargeOf })], ticks: layout === 'heap' ? 30 : ticksPerScenario });
+      });
+    }
+  }
+}
+
 // Ten thousand nodes: many-body alone, link alone, and run.mjs's forces.
 if (!quick) {
   const count = 10000;

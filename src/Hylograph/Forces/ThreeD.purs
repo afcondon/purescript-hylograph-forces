@@ -10,8 +10,10 @@
 -- | d3-force, ISC, Mike Bostock); see LICENSE.
 module Hylograph.Forces.ThreeD
   ( Force
+  , manyBody
   , link
   , linkById
+  , collide
   , center
   , positionX
   , positionY
@@ -31,8 +33,12 @@ import Effect (Effect, foreachE)
 import Hylograph.Forces.Random as Random
 import Hylograph.Forces.ThreeD.Center (Center)
 import Hylograph.Forces.ThreeD.Center as Center
+import Hylograph.Forces.ThreeD.Collide (Collide)
+import Hylograph.Forces.ThreeD.Collide as Collide
 import Hylograph.Forces.ThreeD.Link (Link)
 import Hylograph.Forces.ThreeD.Link as Link
+import Hylograph.Forces.ThreeD.ManyBody (ManyBody)
+import Hylograph.Forces.ThreeD.ManyBody as ManyBody
 import Hylograph.Forces.ThreeD.Node (Node, Pinnable)
 import Hylograph.Forces.ThreeD.Position (Position)
 import Hylograph.Forces.ThreeD.Position as Position
@@ -43,12 +49,17 @@ import Hylograph.Forces.Tick as Tick
 
 -- | An initialized force of any kind.
 data Force row
-  = LinkForce (Link row)
+  = ManyBodyForce (ManyBody row)
+  | LinkForce (Link row)
+  | CollideForce (Collide row)
   | CenterForce (Center row)
   | PositionXForce (Position row)
   | PositionYForce (Position row)
   | PositionZForce (Position row)
   | RadialForce (Radial row)
+
+manyBody :: forall row. ManyBody.Config row -> Random.Source -> Array (Node row) -> Force row
+manyBody config random nodes = ManyBodyForce (ManyBody.initialize config random nodes)
 
 link
   :: forall row linkRow
@@ -73,6 +84,9 @@ linkById
   -> Either String (Force row)
 linkById identify config random nodes links = map LinkForce (Link.initializeById identify config random nodes links)
 
+collide :: forall row. Collide.Config row -> Random.Source -> Array (Node row) -> Force row
+collide config random nodes = CollideForce (Collide.initialize config random nodes)
+
 center :: forall row. Center.Config -> Array (Node row) -> Force row
 center config nodes = CenterForce (Center.initialize config nodes)
 
@@ -91,7 +105,9 @@ radial config nodes = RadialForce (Radial.initialize config nodes)
 -- | Apply one force at the given alpha: d3's `force(alpha)`.
 applyForce :: forall row. Number -> Force row -> Effect Unit
 applyForce alpha force = case force of
+  ManyBodyForce state -> ManyBody.apply state alpha
   LinkForce state -> Link.apply state alpha
+  CollideForce state -> Collide.apply state
   CenterForce state -> Center.apply state
   PositionXForce state -> Position.applyX state alpha
   PositionYForce state -> Position.applyY state alpha
